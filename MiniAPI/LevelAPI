@@ -1,0 +1,472 @@
+local MainFolder = FileAPI.getMainDirectory()
+local AssetsFolder = FileAPI.getAssetsDirectory()
+local SavesFolder = FileAPI.getSavesDirectory()
+local Assets = LoadAPI.getAssets()
+local animationEnabled = false
+local OffsetX, OffsetY = 0, 0
+local WorldX, WorldY
+local worldSaveName
+
+-- [Gets the background color of a specific point, useful for drawing things] --
+function getBackgroundColor(map,dim,px,py,bool)
+  if map[dim][2][px][py].bgT == nil then
+    if bool and map[dim][1][px][py].bgT2 ~= nil then
+      return map[dim][1][px][py].bgT2
+    else
+      return map[dim][1][px][py].bgT
+    end
+  else
+    if bool and map[dim][2][px][py].bgT2 ~= nil then
+      return map[dim][2][px][py].bgT2
+    else
+      return map[dim][2][px][py].bgT
+    end
+  end
+end
+
+-- [Gets the text color of a specific point, useful for drawing things] --
+function getTextColor(map,dim,px,py,bool)
+  if map[dim][3][px][py].Tex ~= nil then
+    if bool and map[dim][3][px][py].Tex2 ~= nil then
+      return map[dim][3][px][py].Tex2, map[dim][3][px][py].Sym2
+    else
+      return map[dim][3][px][py].Tex, map[dim][3][px][py].Sym2
+    end
+  elseif map[dim][2][px][py].fgT == nil then
+    if bool and map[dim][1][px][py].fgT2 ~= nil then 
+      return map[dim][1][px][py].fgT2, map[dim][1][px][py].fgS2
+    else
+      return map[dim][1][px][py].fgT, map[dim][1][px][py].fgS
+    end
+  else
+    if bool and map[dim][2][px][py].fgT2 ~= nil then
+      return map[dim][2][px][py].fgT2, map[dim][2][px][py].fgS2
+    else
+      return map[dim][2][px][py].fgT, map[dim][2][px][py].fgS
+    end
+  end
+end
+
+-- [Returns true if the id exists] --
+function checkID(id)
+  if type(id) == "number" then
+    for i = 1, 1000 do
+      if Assets[i] ~= nil then
+        if i == id then
+          return Assets[i].name, i
+        end
+      end
+    end
+  elseif type(id) == "string" then
+    for i = 1, 1000 do
+      if Assets[i] ~= nil then
+        if Assets[i].name == id then
+          return Assets[i].name, i
+        end
+      end
+    end
+  end
+end
+
+--[Sets the table for the map]--
+function setMap(mx,mx2)
+  local map = {}
+  for f = -1, 1 do 
+    map[f] = {} -- Make 0 become f when ready for more dimensions
+    for e = 1, 3 do -- Make this 3 when ready for dropped items
+    map[f][e] = {}
+      for g = mx, mx2 do
+        map[f][e][g] = {}
+        for h = mx, mx2 do
+          map[f][e][g][h] = {}
+        end
+      end
+    end
+  end
+  return map
+end 
+
+--[Takes in 2 IDs for generation]--
+function basicGeneration(id,id2,c,tc)
+	if math.random(tc) <= c then
+		return id
+	else
+		return id2
+	end
+end
+
+--[Takes in 4 IDs instead of 2 for generation]--
+function lessBasicGeneration(id,id2,id3,id4,c1,c2,c3,tc)
+	if math.random(tc) <= c1 then
+		return id
+	elseif math.random(tc) <= c2 then
+		return id2
+	elseif math.random(tc) <= c3 then
+		return id3
+	else
+		return id4
+	end
+end
+
+--[First Generation, Only does dirt, grass and sand to begin with]--
+function firstGeneration(map, mx, mx2)
+  -- Overworld
+  for i = mx, mx2 do 
+    for j = mx, mx2 do
+      if i >= mx + 1 then
+        if map[0][1][i][j - 1] == Assets[50] and map[0][1][i - 1][j] == Assets[50] then
+          map[0][1][i][j] = Assets[basicGeneration(50,56, 90,100)] --Assets[lessBasicGeneration(55,50,50,56, 25,50,90,100)]
+        elseif map[0][1][i][j - 1] == Assets[56] and map[0][1][i - 1][j] == Assets[56] then
+          map[0][1][i][j] = Assets[basicGeneration(50,56, 10,100)]
+        else
+          map[0][1][i][j] = Assets[basicGeneration(50,56, 50,100)]
+        end
+      else
+        map[0][1][i][j] = Assets[basicGeneration(50,56, 50,100)]
+      end
+    end
+  end
+  -- Cave System
+  for i = mx, mx2 do
+    for j = mx, mx2 do
+      map[-1][1][i][j] = Assets[55]
+      local chance = math.random(4)
+      if chance == 1 then
+        map[-1][2][i][j] = Assets[1]
+      end
+    end
+  end
+
+  return map
+end
+
+--[Second Generation, starts adding flowers, dirt and water]--
+function secondGeneration(map, mx, mx2)
+  -- Overworld
+  for i = mx, mx2 do 
+    for j = mx, mx2 do
+      if i >= mx + 1 then
+        if map[0][1][i][j - 1] == Assets[50] and map[0][1][i - 1][j] == Assets[50] and map[0][1][i][j + 1] == Assets[50] then
+          if math.random(100) <= 75 then
+            map[0][1][i][j] = Assets[lessBasicGeneration(50,52,53,54, 85,90,95,100)]
+          else
+            map[0][1][i][j] = Assets[basicGeneration(50,55, 75,100)]
+          end
+            --[[
+          elseif map[0][1][i][j - 1] == Assets[57] and map[0][1][i - 1][j] == Assets[57] and map[0][1][i][j] == Assets[57] and map[0][1][i][j + 1] == Assets[57] then
+            map[0][1][i][j] = Assets[basicGeneration(51,51,1,100)]
+          elseif map[0][1][i][j - 1] == Assets[51] and map[0][1][i - 1][j] == Assets[51] and map[0][1][i][j] == Assets[51] and map[0][1][i][j + 1] == Assets[51] then
+            map[0][1][i][j] = Assets[basicGeneration(51,51,1,100)]  
+            ]]--
+        end
+      else
+        map[0][1][i][j] = Assets[basicGeneration(50,55,50,100)]
+      end
+    end
+  end
+
+  -- Cave System
+  for i = mx, mx2 do
+    for j = mx, mx2 do
+      if i >= mx + 1 then
+        local chance = math.random(3)
+        if map[-1][2][i][j - 1] == Assets[1] then  
+          if chance == 1 then
+            map[-1][2][i][j] = Assets[1]
+          end
+        elseif map[-1][2][i - 1][j] == Assets[1] then
+          if chance == 1 then
+            map[-1][2][i][j] = Assets[1]
+          end
+        elseif map[-1][2][i][j + 1] == Assets[1] then
+          if chance == 1 then
+            map[-1][2][i][j] = Assets[1]
+          end
+        elseif map[-1][2][i - 1][j + 1] == Assets[1] then
+          if chance == 1 then
+            map[-1][2][i][j] = Assets[1]
+          end
+        elseif map[-1][2][i - 1][j - 1] == Assets[1] then
+          if chance == 1 then
+            map[-1][2][i][j] = Assets[1]
+          end
+        end
+      end
+    end
+  end
+
+  return map
+end
+
+--[Third Generation, adds in blocks like stone and trees]--
+function thirdGeneration(map, mx, mx2)
+  -- Overworld
+  for i = mx, mx2 do
+    for j = mx, mx2 do
+      if i >= mx + 1 then
+        if map[0][1][i][j] == Assets[55] then
+          local tree = math.random(2)
+          if tree == 1 then
+            map[0][2][i][j] = Assets[2]
+            map[0][2][i - 1][j - 1] = Assets[3]
+            --map[0][2][i + 1][j - 1] = Assets[3]
+            map[0][2][i][j - 1] = Assets[3]
+            map[0][2][i][j - 2] = Assets[3]
+          else
+            map[0][2][i][j] = Assets[1]
+          end
+        end
+      end
+    end
+  end
+
+  -- Cave System
+  for i = mx, mx2 do
+    for j = mx, mx2 do
+      if i >= mx + 1 then
+        local chance = math.random(5)
+        if chance == 1 then
+          if map[-1][2][i][j - 1] == Assets[1] and map[-1][2][i - 1][j] == Assets[1] and map[-1][2][i][j + 1] == Assets[1] then
+            map[-1][2][i][j] = Assets[basicGeneration(8,9, 75,100)]
+          end
+        end
+      end
+    end
+  end
+
+  return map
+end
+
+--[Creates the map, using my (very) basic generator]--
+function createMap(mx, mx2)
+ 	local map = setMap(mx, mx2)
+  local map = firstGeneration(map, mx, mx2)
+  local map = secondGeneration(map, mx, mx2)
+  local map = thirdGeneration(map, mx, mx2)
+  local loadedMods = LoadAPI.getLoadedMods()
+  for i = 1, #loadedMods do 
+    if loadedMods[i].Type == "generation" then
+      func = loadedMods[i].Addon
+      map = func(map, mx, mx2)
+    end
+  end
+  return map
+end
+
+--[Returns a map with coordinates for an optional random placement]--
+function newWorld(dim, mx, mx2)
+  local map = createMap(dim, mx, mx2)
+  local px, py = PlayerAPI.newPlayerPos(map, dim)
+  return map, px, py
+end
+
+
+--[Updates the map aswell as redrawing it]--
+function updateMap(map, dim, ox, oy)
+  local sx, sy = term.getSize()
+  local lbT = 1
+  local lbC = 1
+  local lbX = 0
+  local lbX2 = 0
+
+  if animationEnabled then
+    animationEnabled = false
+  else
+    animationEnabled = true
+  end
+
+  --[[ -- This will be for fastest graphics 
+  for j = 1, sy do 
+    for i = 1, sx do 
+      local mx = i + ox
+      local my = j + oy
+      if mx > WorldY then
+        mx = WorldY
+      end
+      if mx < WorldX then
+        mx = WorldX 
+      end
+      if my > WorldY then
+        my = WorldY
+      end
+      if my < WorldX then
+        my = WorldX 
+      end
+      if getBackgroundColor(map,dim,mx,my,animationEnabled) == lbC then
+        if i == sx then
+          paintutils.drawLine(i - lbX, j, i, j, lbC)
+          lbX = 0
+        else
+          lbX = lbX + 1      
+        end
+      else
+        paintutils.drawLine(i - lbX, j, i - 1, j, lbC)
+        lbC = getBackgroundColor(map,dim,mx,my,animationEnabled)
+        lbX = 1
+      end
+    end
+  end
+  ]]--
+
+  -- Fancy graphics; fast graphics will be fgS only for blocks
+  for j = 1, sy do 
+    for i = 1, sx do 
+      local mx = i + ox
+      local my = j + oy
+
+      if mx > WorldY then
+        mx = WorldY
+      end
+      if mx < WorldX then
+        mx = WorldX 
+      end
+      if my > WorldY then
+        my = WorldY
+      end
+      if my < WorldX then
+        my = WorldX 
+      end
+
+      local lbTC, lbS = getTextColor(map,dim,mx,my,animationEnabled)
+      if lbTC ~= lbT then
+        lbT = lbTC
+        term.setTextColor(lbT)
+      end
+      term.setBackgroundColor(getBackgroundColor(map,dim,mx,my,animationEnabled))
+      term.setCursorPos(i, j)
+      term.write(lbS)
+    end
+  end
+
+  --[[ Projectile updator
+  for j = 1, sy do 
+    for i = 1, sx do 
+      local mx = i + ox
+      local my = j + oy
+
+      if mx > WorldY then
+        mx = WorldY
+      end
+      if mx < WorldX then
+        mx = WorldX 
+      end
+      if my > WorldY then
+        my = WorldY
+      end
+      if my < WorldX then
+        my = WorldX 
+      end
+
+      if map[dim][3][mx][my].life then
+        if map[dim][3][mx][my].life > 0 then
+          map[dim][3][mx][my].life = map[dim][3][mx][my].life - 1
+        else
+          map[dim][3][mx][my] = {}
+        end
+      end
+    end
+  end
+  ]]--
+  --EntityAPI.updateEntityList(map, dim)
+end
+
+-- [Returns the ID of a block at a specific point] --
+function getBlockID(map,dim,x,y)
+  for i = 1, 1000 do
+    if Assets[i] ~= nil then
+      if map[dim][2][x][y] == Assets[i] then
+        return i
+      end
+    end
+  end
+end
+
+-- [Returns the ID of a tile at a specific point] --
+function getTileID(map, dim, x, y)
+  for i = 1, 1000 do
+    if Assets[i] ~= nil then
+      if map[dim][1][x][y] == Assets[i] then
+        return i
+      end
+    end
+  end
+end
+
+--[[ Lol maybe another time
+function getTiles(map,dim,mx,mx2,tileID)
+	local foundTiles = {}
+	for i = mx, mx2 do
+		for j = mx, mx2 do
+			for k = 1, 2 do
+				if map[dim][k][i][j] == Assets[tileID] then
+					foundTiles[i].dim = dim
+					foundTiles[i].lvl = k
+					foundTiles[i].x = i
+					foundTiles[i].y = j
+					foundTiles[i].id = tileID
+				end
+			end
+		end
+	end
+	return foundTiles
+end
+
+function replaceTiles(map,dim,mx,mx2,tileID,rTileID)
+	tilesToReplace = getTiles(map,dim,mx,mx2,tileID)
+	for i = 1, #tilesToReplace do
+		for j = 1, 2 do
+			map[foundTiles[i].dim][foundTiles[i].lvl[tilesToReplace[foundTiles[i].x][tilesToReplace[foundTiles[i].y] = Assets[rTileID]
+		end	
+	end
+	updateMap(map,dim)
+end
+--]]
+
+function changeDimension(n, l)
+  playerX, playerY = PlayerAPI.getPlayerCoordinates()
+  if n ~= 1 then
+    if l then
+      LightingAPI.lightIn(playerX - OffsetX, playerY - OffsetY)
+      PlayerAPI.setPlayerDim(n)
+      LightingAPI.lightOut(playerX - OffsetX, playerY - OffsetY, 6)
+    else
+      PlayerAPI.setPlayerDim(n)
+    end
+  else
+    if l then
+      LightingAPI.lightIn(playerX - OffsetX, playerY - OffsetY, 6)
+      PlayerAPI.setPlayerDim(n)
+      LightingAPI.lightOut(playerX - OffsetX, playerY - OffsetY, 25)
+    else
+      PlayerAPI.setPlayerDim(n)
+    end
+  end
+end
+
+function getOffset()
+  return OffsetX, OffsetY
+end
+
+function setOffset(ox, oy)
+  OffsetX, OffsetY = ox, oy
+end
+
+function setWorldSize(x,y)
+  if x and y then
+    WorldX, WorldY = x, y
+  end
+end
+
+function getWorldSize()
+  return WorldX, WorldY
+end
+
+function setWorldName(str)
+  if type(str) == "string" then
+    worldSaveName = str
+  end
+end
+
+function getWorldName()
+  return worldSaveName
+end

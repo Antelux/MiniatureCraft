@@ -1,0 +1,31 @@
+local CursorX, CursorY = 1,1
+local moddedAssets = {
+	[32] = {name = "Mini Computer", health = 35, drop = 230, type = "rock", bgT = colors.lightGray, fgT = colors.black, fgS = "="},
+	[250] = {name = "Mini Computer", placeableBlock = 32, type = "item", Tex = colors.black, Sym = "="},
+}
+
+function setRecipes()
+  CraftingAPI.setRecipe(13, 250, 1, {201, 7, 235, 1, 220, 1}) -- Computer
+end
+
+function computerInterface(e, p1, p2, p3, x, y)
+  local sx, sy = term.getSize()
+  local windowX, windowY, windowHeight = 8, 5, 11
+
+  MenuAPI.createMenu(7, 4, sx - 12, sy - 6, "-", colors.gray, colors.white, colors.white)
+  MenuAPI.createMenu(8, 5, sx - 14, sy - 8, "", colors.black, colors.white, colors.white, "", "", "")
+  term.setTextColor(colors.white)
+  term.setCursorPos(CursorX + 7, CursorY + 4)
+  if e == "key" then 
+    if p1 == 16 or p1 == 18 then -- Q, E
+      return false
+    else
+      local str = read()
+      CursorY = CursorY + 1
+    end
+  end
+end
+
+LoadAPI.addMod("ComputerAssets", "asset", moddedAssets, "Sets the data for computer stuff.")
+LoadAPI.addMod("ComputerRecipes", "load", setRecipes, "Adds in recipes to create computer stuff.")
+LoadAPI.addMod("ComputerInteraction", "interact", computerInterface, 32, "Lets users interact with the computers.")

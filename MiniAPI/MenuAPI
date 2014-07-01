@@ -1,0 +1,232 @@
+local Assets = LoadAPI.getAssets()
+local sx, sy = term.getSize()
+local selected = 1
+local subMenu, subName
+local worldName = "World"
+
+function formatString(str, n)
+  if string.len(str) > n then
+    local sTbl = {}
+    local found = 0
+    local split = 0
+    str:gsub(".", function(c) table.insert(sTbl, c) end)
+    for i = 1, #sTbl do
+      if sTbl[i] == string.upper(sTbl[i]) and found == 1 then 
+        split = i
+        break
+      elseif sTbl[i] == string.upper(sTbl[i]) then
+        found = found + 1
+      end
+    end
+    if split ~= 0 then
+      newStr = sTbl[1].. "" ..sTbl[2].. "" ..sTbl[split - 2].. "" ..sTbl[split - 1].. "" ..sTbl[split].. "" ..sTbl[split + 1].. "" ..sTbl[split + 2]
+      return newStr
+    end
+  else
+    return str
+  end
+end
+
+function createMenu(x,y,w,h,str,bg,bc,bc2,fs,fs2,fs3)
+  local bg = bg or colors.blue
+  local bc = bc or colors.white
+  local bc2 = bc2 or colors.yellow
+  local fs = fs or "|"
+  local fs2 = fs2 or "-"
+  local fs3 = fs3 or "+"
+
+  for i = 1, h do
+    paintutils.drawLine(x, (y - 1) + i, (x - 1) + w, (y - 1) + i, bg)
+  end
+
+  term.setTextColor(bc)
+  term.setCursorPos(x,y)
+  term.write(fs3)
+  term.setCursorPos((x - 1) + w, y)
+  term.write(fs3)
+  term.setCursorPos(x, (y - 1) + h)
+  term.write(fs3)
+  term.setCursorPos((x - 1) + w, (y - 1) + h)
+  term.write(fs3)
+
+  for i = 1, h - 2 do
+  	term.setCursorPos(x, y + i)
+  	term.write(fs)
+  	term.setCursorPos((x - 1) + w, y + i)
+  	term.write(fs)
+  end
+
+  for i = 1, w - 2 do
+  	term.setCursorPos(x + i, y)
+  	term.write(fs2)
+  	term.setCursorPos(x + i, (y - 1) + h)
+  	term.write(fs2)
+  end
+
+  term.setCursorPos(x + 2, y)
+  term.setTextColor(bc2)
+  term.write(str)
+end
+
+function menuList(x,y,w,h,str,tab,sel)
+  createMenu(x,y,w,h,str)
+  local cSDone = false
+  for i = 1, h - 2 do 
+    cS = (i - 1) + sel
+    if not cSDone then
+      cS2 = cS
+      cSDone = true
+    end
+    if tab[cS] ~= nil then
+      if tab[cS].ID ~= nil then
+
+    	  term.setCursorPos(x + 2, y + i)
+    	  term.setTextColor(colors.lightGray)
+
+        if cS2 == cS then
+          print("[" ..formatString(Assets[tab[cS].ID].name, 7).. "]")
+          returnID, n = true, i
+        else
+    	    print(formatString(Assets[tab[cS].ID].name, 7))
+        end
+
+        if tab[cS].Amount ~= nil then
+          term.setCursorPos(w - 5, y + i)
+          term.write("x" ..tab[cS].Amount)
+        end
+
+        if Assets[tab[cS].ID].Tex then
+    	    term.setTextColor(Assets[tab[cS].ID].Tex)
+    	    term.setCursorPos(w - 1, y + i)
+    	    term.write(Assets[tab[cS].ID].Sym)
+        end
+      end
+    end
+  end
+  
+  if returnID then
+    return tab[n].ID, n
+  end
+end
+
+if sx < sy then
+  demoMapX = sy
+else
+  demoMapX = sx
+end
+
+LevelAPI.setWorldSize(-demoMapX,demoMapX)
+local demoMap = LevelAPI.newWorld(-demoMapX, demoMapX)
+
+local options = {
+  "NEW WORLD",
+  "LOAD WORLD",
+  "OPTIONS"
+}
+
+local sizeOptions = {
+  [1] = {str = "SMALL (64 x 64)", sizeX = -64, sizeY = 64},
+  [2] = {str = "MEDIUM (128 x 128)", sizeX = -128, sizeY = 128},
+  [3] = {str = "LARGE (256 x 256)", sizeX = -256, sizeY = 256}
+}
+
+local optionOptions = {
+  [1] = {str = "NAME:"},
+  [2] = {str = "COLOR:"},
+  [3] = {str = "GRAPHICS:"}
+}
+
+local graphicOptions = {
+  [1] = {str = "FASTEST"},
+  [2] = {str = "FAST"},
+  [3] = {str = "FANCY"}
+}
+
+function mainMenu(e, p1, p2, p3)
+  if e == "key" then 
+    if p1 == 17 or p1 == 200 then -- Up Key
+      selected = selected + 1
+      if selected > #options then
+        selected = 1
+      end
+
+    elseif p1 == 31 or p1 == 208 then -- Down Key 
+      selected = selected - 1
+      if selected < 1 then
+        selected = #options
+      end  
+      
+    elseif p1 == 28 or p1 == 18 then -- Enter, E
+      if not subMenu then
+        if selected == 1 then
+          selected = 1
+          subMenu, subName, subTab = true, "SIZE", sizeOptions
+        elseif selected == 3 then
+          selected = 3
+          subMenu, subName, subTab = true, "SETTINGS", optionOptions
+        end
+        oldSelected = selected
+      else
+        if oldSelected == 1 then 
+          LevelAPI.setWorldName(worldName)
+          return false, sizeOptions[selected].sizeX, sizeOptions[selected].sizeY
+        elseif oldSelected == 3 then
+          local m
+        end
+      end
+
+    elseif p1 == 14 or p1 == 16 then -- Enter, Q, or p1 == (Esc Key) then 
+      selected = oldSelected
+      subMenu, subName = false, nil
+    end
+
+  elseif e == "mouse_click" then
+    if oldSelected == 1 and subMenu then
+      if p2 >= 23 and p2 <= 22 + #subName * 5 and p3 == 13 then
+        paintutils.drawLine(23,13,22 + #subName * 5,13,colors.gray)
+        term.setTextColor(colors.lightGray)
+        term.setCursorPos(23,13)  
+        worldName = read()      
+        if worldName == "" then
+          worldName = "World"
+        end
+      end
+    end
+  end
+
+  if not subMenu then
+    LevelAPI.updateMap(demoMap,0,0,0)
+    createMenu(7,4,sx - 12,sy - 6, "MINIATURECRAFT")
+    term.setTextColor(colors.lightGray)
+    for i = 1, #options do
+        term.setCursorPos(9, 4 + i)
+        if i == selected then
+          print("[" ..options[i].. "]")
+        else
+          print(options[i])
+        end
+    end
+  end
+
+  if subMenu then
+    createMenu(22,6,#subName * 5 + 2,#subTab + 2, subName)
+    term.setTextColor(colors.lightGray)
+    for i = 1, #subTab do
+      term.setCursorPos(23, 6 + i)
+      if i == selected then
+        print("[" ..subTab[i].str.. "]")
+      else
+        print(subTab[i].str)
+      end
+    end
+    if oldSelected == 1 then
+      createMenu(22,12,#subName * 5 + 2,3, "LEVEL-NAME")
+      paintutils.drawLine(23,13,22 + #subName * 5,13,colors.gray)
+      term.setTextColor(colors.lightGray)
+      term.setCursorPos(23,13)
+      print(worldName)
+    end
+  end
+
+  return true
+end

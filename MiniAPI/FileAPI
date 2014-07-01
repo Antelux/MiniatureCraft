@@ -1,0 +1,139 @@
+-- Directorys
+local MainFolder = "MiniatureCraft"
+local fileDirectory = {
+	MainFolder.. "/MiniAPI",
+	MainFolder.. "/MiniAssets",
+	MainFolder.. "/MiniMods",
+	MainFolder.. "/MiniSaves",
+	MainFolder.. "/MiniConfig"
+}
+
+function getMainDirectory()
+	return MainFolder
+end
+
+function getAPIDirectory()
+	return fileDirectory[1]
+end
+
+function getAssetsDirectory()
+	return fileDirectory[2]
+end
+
+function getModsDirectory()
+	return fileDirectory[3]
+end
+
+function getSavesDirectory()
+	return fileDirectory[4]
+end
+
+function getConfigDirectory()
+	return fileDirectory[5]
+end
+
+for i = 1, #fileDirectory do
+	if not fs.exists(fileDirectory[i]) then
+		fs.makeDir(fileDirectory[i])
+	end
+end
+
+function saveMap(map)
+  local folderName = LevelAPI.getWorldName()
+  local SavesFolder = fileDirectory[4]
+  local WorldX, WorldY = LevelAPI.getWorldSize()
+  if fs.exists(SavesFolder.. "/" ..folderName) then
+    fs.delete(SavesFolder.. "/" ..folderName)
+  end
+  fs.makeDir(SavesFolder.. "/" ..folderName)
+
+  local pX, pY = PlayerAPI.getPlayerCoordinates()
+  local pD = PlayerAPI.getPlayerDirection()
+  local OX, OY = LevelAPI.getOffset()
+  local pH = PlayerAPI.getPlayerHealth()
+  local pE = PlayerAPI.getPlayerEnergy()
+  local pM = PlayerAPI.getPlayerMode()
+  local levelData = {
+    mapX = WorldX,
+    mapY = WorldY,
+    playerX = pX,
+    playerY = pY,
+    playerD = pD,
+    playerH = pH,
+    playerE = pE,
+    playerM = pM,
+    offsetX = OX,
+    offsetY = OY
+  }
+
+  local world = fs.open(SavesFolder.. "/" ..folderName.. "/world.data", "w")
+  for f = -1, 0 do
+    for g = WorldX, WorldY do
+      for h = WorldX, WorldY do
+        local blockName, block = LevelAPI.checkID(map[f][2][g][h].name) 
+        local tileName, tile = LevelAPI.checkID(map[f][1][g][h].name) 
+        if tile and block then
+          world.writeLine(tile.. "-" ..block) 
+        else
+          world.writeLine(tile) 
+        end
+      end
+    end
+  end
+
+  world.close()
+  local serializedLevelData = textutils.serialize(levelData)
+  local worldConfig = fs.open(SavesFolder.. "/" ..folderName.. "/world.config", "w")
+  worldConfig.write(serializedLevelData)
+  worldConfig.close() 
+end
+
+function loadMap(name)
+  local SavesFolder = fileDirectory[4]
+  local loadingConfig = fs.open(SavesFolder.. "/" ..name.. "/world.config", "r")
+  local loadedConfig = loadingConfig.readAll()
+  local configData = textutils.unserialize(loadedConfig)
+  loadingConfig.close()
+
+  PlayerAPI.setPlayerDirection(configData.playerD)
+  PlayerAPI.setPlayerCoordinates(configData.playerX, configData.playerY)
+  PlayerAPI.setPlayerHealth(configData.playerH)
+  PlayerAPI.setPlayerEnergy(configData.playerE)
+  PlayerAPI.setPlayerMode(configData.playerM)
+  LevelAPI.setOffset(configData.offsetX, configData.offsetY)
+
+  local newMap = setMap(configData.mapX, configData.mapY)
+  LevelAPI.setWorldSize(configData.mapX, configData.mapY)
+  local loadingMap = fs.open(SavesFolder.. "/" ..name.. "/world.data", "r")
+
+  for i = -1, 0 do
+    for j = configData.mapX, configData.mapY do
+      for k = configData.mapX, configData.mapY do
+        local tile, block
+        local keepVar = {}
+        local currentLine = loadingMap.readLine()
+        for n in string.gmatch(currentLine, "%d+") do
+          local newNumber = #keepVar + 1
+          keepVar[newNumber] = {}
+          keepVar[newNumber] = n
+        end
+        tile = tonumber(keepVar[1]) or 0
+        block = tonumber(keepVar[2]) or 0
+
+        if Assets[tile] then
+          newMap[i][1][j][k] = Assets[tile]
+        else
+          newMap[i][1][j][k] = {}
+        end
+
+        if Assets[block] then
+          newMap[i][2][j][k] = Assets[block]
+        else
+          newMap[i][2][j][k] = {}
+        end
+      end
+    end
+  end
+  loadingMap.close()
+  return newMap
+end

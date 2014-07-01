@@ -1,0 +1,102 @@
+local entityList = {}
+local Assets = LoadAPI.getAssets()
+
+function getEntityList()
+  return entityList
+end
+
+function newEntity(id, x, y)
+  local ox, oy = LevelAPI.getOffset()
+  local n = #entityList + 1
+  entityList[n] = Assets[id]
+  entityList[n].X = x
+  entityList[n].Y = y
+  entityList[n].OX = x + ox
+  entityList[n].OY = y + oy
+  entityList[n].ID = id
+  entityList[n].R = n
+  entityList[n].D = math.random(4)
+end
+
+function removeEntity(r, id)
+  local eL = getEntityList()
+  if r == 0 then
+    for i = 1, #eL do
+      if eL[i].ID == id then
+        table.remove(eL, i)
+      end
+    end
+  else
+    --for i = 1, #eL do
+    --  if eL[i].ID == id then
+    --    if i == r then
+          table.remove(eL, r)
+    --      break
+    --    end
+    --  end
+    --end
+  end
+end
+
+function updateEntitys(map, dim)
+  local eL = getEntityList()
+  for i = 1, #eL do
+    local chance = math.random(10)
+    if chance == 1 then
+      local moveUp = math.random(-1, 1)
+      local moveDown = math.random(-1, 1)
+      local moveLeft = math.random(-1, 1)
+      local moveRight = math.random(-1, 1)
+      local newX =  moveLeft + moveRight + eL[i].X 
+      local newY = moveUp + moveDown + eL[i].Y
+      if not map[dim][2][newX - eL[i].OX][newY - eL[i].OY].bgT then
+        eL[i].X = newX
+        eL[i].Y = newY
+        eL[i].OX = eL[i].OX + newX
+        eL[i].OY = eL[i].OY + newY
+      end
+    end
+  end
+end
+
+function updateEntityList(map, dim)
+  local eL = getEntityList()
+  local ox, oy = LevelAPI.getOffset()
+  local sx, sy = term.getSize()
+  --[[
+  for i = 1, #eL do
+    if eL[i].Health =< 0 then
+      removeEntity(eL[i].R)
+    end
+  end
+  ]]--
+  updateEntitys(map, dim)
+  for i = 1, #eL do
+    local nX, nY = eL[i].X - eL[i].OX, eL[i].Y - eL[i].OY
+    local mobCol = LevelAPI.getBackgroundColor(map,dim,nX,nY)
+    --if nx > 0 + ox and nx < sx + 1 + ox then
+    --  if ny > 0 + oy and ny < sy + 1 + oy then
+        local Sym = eL[i].Sym
+        local Sym2 = eL[i].Sym2 or Sym
+        local Sym3 = eL[i].Sym3 or Sym
+        local Sym4 = eL[i].Sym4 or Sym
+        term.setCursorPos(nX, nY)
+        term.setBackgroundColor(mobCol)
+        term.setTextColor(eL[i].Tex)
+        if eL[i].D == 1 then
+          term.write(Sym)
+        elseif eL[i].D == 2 then
+          term.write(Sym2)
+        elseif eL[i].D == 3 then
+          term.write(Sym3)
+        else
+          term.write(Sym4)
+        end
+    --  end
+    --end
+  end
+end
+
+
+
+

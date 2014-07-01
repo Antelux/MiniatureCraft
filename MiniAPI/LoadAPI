@@ -1,0 +1,91 @@
+function mergeTables(tbl1, tbl2)
+	for k, v in pairs(tbl1) do 
+      tbl2[k] = v 
+    end
+    return tbl2
+end
+
+function loadAssets()
+    Assets = {}
+    local AssetsFolder = FileAPI.getAssetsDirectory()
+    local MiniAssets = fs.list(AssetsFolder)
+    for _, file in ipairs(MiniAssets) do
+     	local newTable = fs.open(AssetsFolder.. "/" ..file, "r")
+        local data = newTable.readAll()
+        newTable.close()
+        local newAsset = textutils.unserialize(data)
+        Assets = mergeTables(newAsset, Assets)
+    end
+    return Assets
+end
+
+local loadedMods = {}
+function loadMods()
+    local ModsFolder = FileAPI.getModsDirectory()
+    local MiniMods = fs.list(ModsFolder)
+    for _, file in ipairs(MiniMods) do
+        parentMod = file
+        dofile(ModsFolder.. "/" ..file)
+    end
+    return loadedMods
+end
+
+function getAssets()
+    return Assets
+end
+
+function getLoadedMods()
+    return loadedMods
+end
+
+function reloadAll()
+    interactionBlocks = {}
+    Assets = loadAssets()
+    loadedMods = loadMods()
+    return Assets, loadedMods
+end
+
+local interactionBlocks = {}
+function setInteractionBlock(id, func)
+  local newNumber = #interactionBlocks + 1
+  interactionBlocks[newNumber] = {}
+  interactionBlocks[newNumber].ID = id
+  interactionBlocks[newNumber].Func = func
+end
+
+function getInteractionBlocks()
+  return interactionBlocks
+end
+
+function checkInteractionBlocks(id)
+  local iBlck = getInteractionBlocks()
+  for i = 1, #iBlck do
+    if iBlck[i].ID == id then
+      return true, i, iBlck[i].Func
+    end
+  end
+end
+
+function addMod(name, modType, addon, addon2, addon3, addon4) 
+    Assets = getAssets()
+    local newNumber = #loadedMods + 1
+    loadedMods[newNumber] = {}
+    loadedMods[newNumber].ParentMod = parentMod
+    loadedMods[newNumber].Name = name
+    loadedMods[newNumber].Type = modType
+    loadedMods[newNumber].Addon = addon
+    if modType == "asset" then
+        mergeTables(addon, Assets)
+    end
+    if modType == "interact" then
+        setInteractionBlock(addon2, addon)
+        info = addon3
+    else
+        info = addon2
+    end
+    if type(info) == "string" then
+        loadedMods[newNumber].Info = info
+    else
+        loadedMods[newNumber].Info = "N/A"
+    end
+end

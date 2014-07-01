@@ -1,0 +1,297 @@
+local Assets = LoadAPI.getAssets()
+local playerX, playerY = 0, 0
+local playerName = "Player"
+local playerColor = colors.red
+local playerDirection = 1
+local playerHealth = 20
+local playerDefence = 0
+local playerEnergy = 20
+local playerDim = 0
+local playerMode = 0
+
+function newPlayerPos(map, dim)
+  local mx, my = LevelAPI.getWorldSize()
+  while true do
+    local px = math.random(mx) 
+    local py = math.random(my) 
+    --if map[dim][2][px][py].bgT == nil then
+      --if map[dim][1][px][py] ~= Assets[13] then
+        return px, py
+      --end
+    --end
+  end
+end
+
+function updatePlayer(map,dim,ox,oy)
+  LevelAPI.updateMap(map,dim,ox,oy)
+  if LevelAPI.getBackgroundColor(map,dim,playerX,playerY) == playerColor then
+    if playerColor == 1 then
+      term.setTextColor(playerColor * 2)
+    else
+      term.setTextColor(playerColor / 2)
+    end
+  else
+    term.setTextColor(playerColor)
+  end
+  term.setBackgroundColor(LevelAPI.getBackgroundColor(map,dim,playerX,playerY))
+  term.setCursorPos(playerX - ox,playerY - oy) 
+  if playerDirection == 1 then
+    term.write("^")
+  elseif playerDirection == 2 then
+    term.write(">")
+  elseif playerDirection == 3 then
+    term.write("V")
+  else
+    term.write("<")
+  end
+  term.setTextColor(colors.white)
+end
+
+function setPlayerDirection(n)
+  if n >= 1 and n <= 4 then
+    playerDirection = n
+  end
+end
+
+function getPlayerDirection()
+  return playerDirection
+end
+
+function getFacingBlock(map,dim,px,py,pD)
+  if pD == 1 then
+    return map[dim][2][px][py-1].name, map[dim][1][px][py-1].name
+  elseif pD == 2 then
+    return map[dim][2][px+1][py].name, map[dim][1][px][py-1].name
+  elseif pD == 3 then
+    return map[dim][2][px][py+1].name, map[dim][1][px][py-1].name
+  else
+    return map[dim][2][px-1][py].name, map[dim][1][px][py-1].name
+  end
+end
+
+function getFacingBlockData(map,dim,px,py,pD)
+    if pD == 1 then
+    return px, py-1, map[dim][2][px][py-1]
+  elseif pD == 2 then
+    return px+1, py, map[dim][2][px+1][py]
+  elseif pD == 3 then
+    return px, py+1, map[dim][2][px][py+1]
+  else
+    return px-1, py, map[dim][2][px-1][py]
+  end
+end
+
+function useItem(map,dim,px,py,pd,ox,oy,id,pInv)
+  local switch = false
+  local used = false
+
+  if Assets[id] ~= nil then
+    if Assets[id].Tex ~= nil then
+      local ix = px
+      local iy = py
+      if pd == 1 then
+        term.setCursorPos((px - ox), (py - oy) - 1)
+        iy = iy - 1
+      elseif pd == 2 then
+        term.setCursorPos((px - ox) + 1, (py - oy))
+        ix = ix + 1
+      elseif pd == 3 then
+        term.setCursorPos((px - ox), (py - oy) + 1)
+        iy = iy + 1
+      else
+        term.setCursorPos((px - ox) - 1, (py - oy))
+        ix = ix - 1
+      end
+
+      term.setBackgroundColor(LevelAPI.getBackgroundColor(map,dim,ix,iy))
+      term.setTextColor(Assets[id].Tex)
+      term.write(Assets[id].Sym)
+
+      local lastBlock2, lastTile2 = getFacingBlock(map,dim,px,py,pd) 
+      local lastBlockName, lastBlock = LevelAPI.checkID(lastBlock2)
+      local lastTileName, lastTile = LevelAPI.checkID(lastTile2)
+      local bool, amnt, num = InventoryAPI.checkInventory(pInv, id)
+      local dmg = 0
+
+      if Assets[id].damage then
+        dmg = Assets[id].damage
+      end
+
+      if map[dim][2][ix][iy].health then
+        if map[dim][2][ix][iy].health <= 0 then
+          map[dim][2][ix][iy] = {}
+          if Assets[lastBlock] then
+            if Assets[lastBlock].drop then
+              for i = 1, #Assets[lastBlock].drop do
+                if not (i % 2 == 0) then
+                  InventoryAPI.addItem(pInv, Assets[lastBlock].drop[i], Assets[lastBlock].drop[i + 1])
+                end
+              end
+            end
+          end
+        end
+      end
+
+      if Assets[id].placeableBlock ~= nil then
+        if lastBlock == nil then
+          if lastTile ~= 57 then
+            map[dim][2][ix][iy] = Assets[Assets[id].placeableBlock]
+            if getPlayerMode() ~= 1 then
+              InventoryAPI.removeItem(pInv, id, 1)
+            end
+          end
+        end
+
+      elseif Assets[id].placeableTile ~= nil then
+        if lastTile == 57 then
+          if lastBlock == nil then
+            map[dim][1][ix][iy] = Assets[Assets[id].placeableTile]
+            if getPlayerMode() ~= 1 then
+              InventoryAPI.removeItem(pInv, id, 1)
+            end
+          end
+        end
+
+      elseif map[dim][2][ix][iy].drop ~= nil then
+
+        if Assets[id].type == "pickaxe" and map[dim][2][ix][iy].type == "rock" then
+          used = true
+          map[dim][2][ix][iy].health = map[dim][2][ix][iy].health - dmg
+
+        elseif Assets[id].type == "axe" and map[dim][2][ix][iy].type == "wood" then
+          used = true
+          map[dim][2][ix][iy].health = map[dim][2][ix][iy].health - dmg
+
+        elseif map[dim][2][ix][iy].type == "any" then
+          used = true
+          map[dim][2][ix][iy].health = map[dim][2][ix][iy].health - dmg
+
+        elseif Assets[id].type == "punch" then
+          used = true
+          map[dim][2][ix][iy].health = map[dim][2][ix][iy].health - dmg   
+
+        elseif Assets[id].type == "sword" or Assets[id].type == "pickaxe" or Assets[id].type == "axe" or Assets[id].type == "shovel" or Assets[id].type == "hoe" then
+          dmg = dmg / 2
+          used = true
+          map[dim][2][ix][iy].health = map[dim][2][ix][iy].health - dmg
+        end
+      end
+
+      if Assets[id].type == "shovel" then
+        if lastTile ~= nil then
+          if lastTile ~= 57 then
+            used = true
+            map[dim][1][ix][iy] = Assets[57]
+            if Assets[lastTile] then
+              if Assets[lastTile].drop then
+                for i = 1, #Assets[lastTile].drop do
+                  if not (i % 2 == 0) then
+                    InventoryAPI.addItem(pInv, Assets[lastTile].drop[i], Assets[lastTile].drop[i + 1])
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+
+      if Assets[id].type == "bow" then
+        if InventoryAPI.checkInventory(pInv, Assets[id].projectile) then
+          used = true
+          if getPlayerMode() ~= 1 then
+            InventoryAPI.removeItem(pInv, Assets[id].projectile, 1)
+          end
+          map[dim][3][ix][iy] = Assets[Assets[id].projectile]
+        end
+      end
+
+      if pInv[num] and used then
+        if pInv[num].durability then
+          if getPlayerMode() ~= 1 then
+            pInv[num].durability = pInv[num].durability - 1
+          end
+        end
+      end
+
+      
+      if dmg and used then
+        term.setCursorPos(25, 8)
+        term.setTextColor(colors.red)
+        term.setBackgroundColor(LevelAPI.getBackgroundColor(map,dim,ix,iy-2))
+        term.write(dmg)
+      end
+      
+    end
+  
+    local switch = InventoryAPI.updateInventory(pInv)
+    return switch
+  end
+end
+
+function setPlayerHealth(n)
+  if n <= 20 and n >= 0 then
+    playerHealth = n
+  end
+end
+
+function getPlayerHealth()
+  return playerHealth
+end
+
+function setPlayerDefence(n)
+  if n <= 20 and n >= 0 then
+    playerDefence = n
+  end
+end
+
+function getPlayerDefence()
+  return playerDefence
+end
+
+function setPlayerEnergy(n)
+  if n <= 20 and n >= 0 then
+    playerEnergy = n
+  end
+end
+
+function getPlayerEnergy()
+  return playerEnergy
+end
+
+function setPlayerCoordinates(px, py)
+  playerX, playerY = px, py
+end
+
+function getPlayerCoordinates()
+  return playerX, playerY
+end
+
+function getPlayerDim()
+  return playerDim
+end
+
+function setPlayerDim(n)
+  if n <= 0 and n >= -1 then
+    playerDim = n
+  end
+end
+
+function setPlayerName(str)
+  if type(str) == "string" then
+    playerName = str
+  end
+end
+
+function getPlayerName()
+  return playerName
+end
+
+function getPlayerMode()
+  return playerMode
+end
+
+function setPlayerMode(n)
+  if n == 0 or n == 1 then
+    playerMode = n
+  end
+end

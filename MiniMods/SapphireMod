@@ -1,0 +1,43 @@
+local moddedAssets = {
+	[30] = {name = "Sapphire Ore", health = 25, drop = 230, type = "rock", bgT = colors.lightGray, fgT = colors.blue, fgS = "+"},
+	[31] = {name = "Sapphire Block", health = 35, drop = 230, type = "rock", bgT = colors.blue, fgT = colors.white, fgS = "L"},
+	[260] = {name = "Sapphire", type = "item", Tex = colors.blue, Sym = "@"},
+	[125] = {name = "Sapph. Sword", durability = 768, damage = 4.5, type = "sword", Tex = colors.blue, Sym = "/"},
+  [126] = {name = "Sapph. Pickaxe", durability = 768, damage = 4.5, type = "pickaxe", Tex = colors.blue, Sym = "T"},
+  [127] = {name = "Sapph. Axe", durability = 768, damage = 4.5, type = "axe", Tex = colors.blue, Sym = "P"},
+  [128] = {name = "Sapph. Shovel", durability = 768, damage = 4.5, type = "shovel", Tex = colors.blue, Sym = "!"},
+  [129] = {name = "Sapph. Hoe", durability = 768, damage = 4.5, type = "hoe", Tex = colors.blue, Sym = "j"},
+  [320] = {name = "Sapph. Helmet", durability = 768, protection = 4.5, type = "helmet", Tex = colors.blue, Sym = "Q"},
+	[321] = {name = "Sapph. Chestplate", durability = 768, protection = 4.5, type = "chestplate", Tex = colors.blue, Sym = "&"},
+	[322] = {name = "Sapph. Leggings", durability = 768, protection = 4.5, type = "leggings", Tex = colors.blue, Sym = "H"},
+	[323] = {name = "Sapph. Boots", durability = 768, protection = 4.5, type = "boots", Tex = colors.blue, Sym = "V"}
+}
+
+function genSapphire(map,mx,mx2)
+	local Assets = LoadAPI.getAssets()
+	for i = mx, mx2 do
+    for j = mx, mx2 do
+    	if map[-1][2][i][j] == Assets[1] then
+        map[-1][2][i][j] = Assets[LevelAPI.basicGeneration(1,30,99,100)]
+      end
+    end
+  end
+  return map
+end
+
+function setRecipes()
+  CraftingAPI.setRecipe(19, 125, 1, {200, 2, 260, 1}) -- Sapphire Sword
+  CraftingAPI.setRecipe(19, 126, 1, {200, 3, 260, 2}) -- Sapphire Pickaxe
+  CraftingAPI.setRecipe(19, 127, 1, {200, 3, 260, 2}) -- Sapphire Axe
+  CraftingAPI.setRecipe(19, 128, 1, {200, 1, 260, 2}) -- Sapphire Shovel
+  CraftingAPI.setRecipe(19, 129, 1, {200, 2, 260, 2}) -- Sapphire Hoe
+
+  CraftingAPI.setRecipe(19, 320, 1, {260, 5}) -- Sapphire Helmet
+  CraftingAPI.setRecipe(19, 321, 1, {260, 8}) -- Sapphire Chestplate
+  CraftingAPI.setRecipe(19, 322, 1, {260, 7}) -- Sapphire Leggings
+  CraftingAPI.setRecipe(19, 323, 1, {260, 4}) -- Sapphire Boots
+end
+
+LoadAPI.addMod("SapphireBlocksAndItems", "asset", moddedAssets, "Sets the data for sapphire stuff.")
+LoadAPI.addMod("SapphireGen", "generation", genSapphire, "Brings sapphires into the world!")
+LoadAPI.addMod("SapphireRecipes", "load", setRecipes, "Adds in recipes to create sapphire stuff.") -- Will re-enable when scrolling is fixed for menu
