@@ -85,8 +85,8 @@ function saveMap(map)
 
   local world = fs.open(SavesFolder.. "/" ..folderName.. "/world.data", "w")
   for f = -1, 0 do
-    yield()
     for g = WorldX, WorldY do
+      yield()
       for h = WorldX, WorldY do
         local blockName, block = LevelAPI.checkID(map[f][2][g][h].name) 
         local tileName, tile = LevelAPI.checkID(map[f][1][g][h].name) 
