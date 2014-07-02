@@ -7,6 +7,11 @@ local OffsetX, OffsetY = 0, 0
 local WorldX, WorldY
 local worldSaveName
 
+local function yield()
+  os.queueEvent("sleep")
+  os.pullEvent("sleep")
+end
+
 -- [Gets the background color of a specific point, useful for drawing things] --
 function getBackgroundColor(map,dim,px,py,bool)
   if map[dim][2][px][py].bgT == nil then
@@ -126,6 +131,7 @@ function firstGeneration(map, mx, mx2)
       end
     end
   end
+  yield()
   -- Cave System
   for i = mx, mx2 do
     for j = mx, mx2 do
@@ -164,7 +170,7 @@ function secondGeneration(map, mx, mx2)
       end
     end
   end
-
+  yield()
   -- Cave System
   for i = mx, mx2 do
     for j = mx, mx2 do
@@ -219,7 +225,7 @@ function thirdGeneration(map, mx, mx2)
       end
     end
   end
-
+  yield()
   -- Cave System
   for i = mx, mx2 do
     for j = mx, mx2 do
@@ -239,15 +245,15 @@ end
 
 --[Creates the map, using my (very) basic generator]--
 function createMap(mx, mx2)
- 	local map = setMap(mx, mx2) sleep()
-  local map = firstGeneration(map, mx, mx2) sleep()
-  local map = secondGeneration(map, mx, mx2) sleep()
-  local map = thirdGeneration(map, mx, mx2) sleep()
+ 	local map = setMap(mx, mx2) yield()
+  local map = firstGeneration(map, mx, mx2) yield()
+  local map = secondGeneration(map, mx, mx2) yield()
+  local map = thirdGeneration(map, mx, mx2) yield()
   local loadedMods = LoadAPI.getLoadedMods()
   for i = 1, #loadedMods do 
     if loadedMods[i].Type == "generation" then
       func = loadedMods[i].Addon
-      map = func(map, mx, mx2) sleep()
+      map = func(map, mx, mx2) yield()
     end
   end
   return map
