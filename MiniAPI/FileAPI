@@ -13,6 +13,13 @@ function setMainDirectory(path)
       MainFolder.. "/MiniSaves",
       MainFolder.. "/MiniConfig"
     }
+
+    for i = 1, #fileDirectory do
+      if not fs.exists(fileDirectory[i]) then
+        fs.makeDir(fileDirectory[i])
+      end
+    end
+    
   else
     error("Main Directory Already Set!")
   end
@@ -40,12 +47,6 @@ end
 
 function getConfigDirectory()
 	return fileDirectory[5]
-end
-
-for i = 1, #fileDirectory do
-	if not fs.exists(fileDirectory[i]) then
-		fs.makeDir(fileDirectory[i])
-	end
 end
 
 function saveMap(map)
