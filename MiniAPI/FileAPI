@@ -2,6 +2,12 @@
 local MainFolder 
 local fileDirectory = {}
 
+local function yield()
+  os.queueEvent("sleep")
+  os.pullEvent("sleep")
+end
+
+
 function setMainDirectory(path)
   if not MainFolder then
     MainFolder = path
@@ -79,6 +85,7 @@ function saveMap(map)
 
   local world = fs.open(SavesFolder.. "/" ..folderName.. "/world.data", "w")
   for f = -1, 0 do
+    yield()
     for g = WorldX, WorldY do
       for h = WorldX, WorldY do
         local blockName, block = LevelAPI.checkID(map[f][2][g][h].name) 
@@ -91,7 +98,7 @@ function saveMap(map)
       end
     end
   end
-
+  yield()
   world.close()
   local serializedLevelData = textutils.serialize(levelData)
   local worldConfig = fs.open(SavesFolder.. "/" ..folderName.. "/world.config", "w")
@@ -118,6 +125,7 @@ function loadMap(name)
   local loadingMap = fs.open(SavesFolder.. "/" ..name.. "/world.data", "r")
 
   for i = -1, 0 do
+    yield()
     for j = configData.mapX, configData.mapY do
       for k = configData.mapX, configData.mapY do
         local tile, block
