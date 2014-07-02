@@ -1,4 +1,3 @@
-local MainFolder = "MiniatureCraft"
 if not term.isColor then
   error("Advanced Computer Required to Play.")
 end
