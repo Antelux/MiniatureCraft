@@ -11,15 +11,15 @@ local playerMode = 0
 
 function newPlayerPos(map, dim)
   local mx, my = LevelAPI.getWorldSize()
-  while true do
-    local px = math.random(mx) 
-    local py = math.random(my) 
+  --while true do
+    local px = math.random(-64, 64) 
+    local py = math.random(-64, 64) 
     --if map[dim][2][px][py].bgT == nil then
       --if map[dim][1][px][py] ~= Assets[13] then
         return px, py
       --end
     --end
-  end
+  --end
 end
 
 function updatePlayer(map,dim,ox,oy)
