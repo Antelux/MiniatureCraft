@@ -1,13 +1,11 @@
--- [Load the games API's, setting up the game's functions] --
-local sx, sy = term.getSize()
---local buffer = dofile("MiniatureCraft/MiniAPI/Buffer")
---local screenBuffer = buffer.new()
-
+MAINFOLDERGOESHERE
 if not term.isColor then
   error("Advanced Computer Required to Play.")
 end
 
-local APIFolder = "MiniatureCraft/MiniAPI"
+-- [Load the games API's, setting up the game's functions] --
+local sx, sy = term.getSize()
+local APIFolder = MainFolder.. "/MiniAPI"
 local MiniAPIs = fs.list(APIFolder)
 os.loadAPI(APIFolder.. "/LoadAPI")
 os.loadAPI(APIFolder.. "/FileAPI")
