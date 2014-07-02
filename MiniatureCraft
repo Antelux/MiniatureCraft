@@ -30,8 +30,6 @@ end
 
 -- [Load the games API's, setting up the game's functions] --
 local sx, sy = term.getSize()
-local newTerm = window.create(term.current(), 1, 1, sx, sy, true)
-term.redirect(newTerm)
 local APIFolder = MainFolder.. "/MiniAPI"
 --local MiniAPIs = fs.list(APIFolder)
 
