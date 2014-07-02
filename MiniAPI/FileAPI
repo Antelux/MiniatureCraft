@@ -1,12 +1,22 @@
 -- Directorys
-local MainFolder = "MiniatureCraft"
-local fileDirectory = {
-	MainFolder.. "/MiniAPI",
-	MainFolder.. "/MiniAssets",
-	MainFolder.. "/MiniMods",
-	MainFolder.. "/MiniSaves",
-	MainFolder.. "/MiniConfig"
-}
+local MainFolder 
+local fileDirectory = {}
+
+function setMainDirectory(path)
+  if not MainFolder then
+    MainFolder = path
+    
+    fileDirectory = {
+      MainFolder.. "/MiniAPI",
+      MainFolder.. "/MiniAssets",
+      MainFolder.. "/MiniMods",
+      MainFolder.. "/MiniSaves",
+      MainFolder.. "/MiniConfig"
+    }
+  else
+    error("Main Directory Already Set!")
+  end
+end
 
 function getMainDirectory()
 	return MainFolder

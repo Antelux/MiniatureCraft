@@ -239,15 +239,15 @@ end
 
 --[Creates the map, using my (very) basic generator]--
 function createMap(mx, mx2)
- 	local map = setMap(mx, mx2)
-  local map = firstGeneration(map, mx, mx2)
-  local map = secondGeneration(map, mx, mx2)
-  local map = thirdGeneration(map, mx, mx2)
+ 	local map = setMap(mx, mx2) sleep()
+  local map = firstGeneration(map, mx, mx2) sleep()
+  local map = secondGeneration(map, mx, mx2) sleep()
+  local map = thirdGeneration(map, mx, mx2) sleep()
   local loadedMods = LoadAPI.getLoadedMods()
   for i = 1, #loadedMods do 
     if loadedMods[i].Type == "generation" then
       func = loadedMods[i].Addon
-      map = func(map, mx, mx2)
+      map = func(map, mx, mx2) sleep()
     end
   end
   return map

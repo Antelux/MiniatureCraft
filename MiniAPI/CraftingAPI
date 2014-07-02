@@ -46,7 +46,7 @@ function setRecipe(name, output, outputAmount, input)
   end
 end
 
---[Crafting Table]--
+--[Crafting Table]-- (Disabled recipes are items / blocks that cannot be used at the moment.)
 setCraftingTable(13, "CRAFTING", 2, 5, 18, 14)
 
 -- Tools
@@ -62,30 +62,31 @@ setRecipe(13, 107, 1, {201, 3, 226, 2}) -- Rock Axe
 setRecipe(13, 108, 1, {201, 1, 226, 2}) -- Rock Shovel
 setRecipe(13, 109, 1, {201, 2, 226, 2}) -- Rock Hoe
 
-setRecipe(13, 151, 1, {226, 3, 242, 3}) -- Bow
+-- setRecipe(13, 151, 1, {226, 3, 242, 3}) -- Bow
 
--- Armor
+--[[ Armor
 setRecipe(13, 300, 1, {221, 5}) -- Cloth Helmet
 setRecipe(13, 301, 1, {221, 8}) -- Cloth Chestplate
 setRecipe(13, 302, 1, {221, 7}) -- Cloth Leggings
 setRecipe(13, 303, 1, {221, 4}) -- Cloth Boots
+--]]
 
 -- Blocks
 setRecipe(13, 223, 1, {200, 4}) -- Crafting Table
 setRecipe(13, 224, 1, {201, 8}) -- Furnace
-setRecipe(13, 228, 1, {201, 8}) -- Oven
+-- setRecipe(13, 228, 1, {201, 8}) -- Oven
 setRecipe(13, 227, 1, {238, 3, 216, 4}) -- Anvil
 
 setRecipe(13, 237, 1, {213, 9}) -- Coal Block
 setRecipe(13, 238, 1, {216, 9}) -- Iron Block
 setRecipe(13, 239, 1, {217, 9}) -- Gold Block
-setRecipe(13, 240, 1, {218, 9}) -- Gem Block
-setRecipe(13, 236, 1, {235, 9}) -- Redstone Block
+-- setRecipe(13, 240, 1, {218, 9}) -- Gem Block
+-- setRecipe(13, 236, 1, {235, 9}) -- Redstone Block
 
 -- Items
 setRecipe(13, 226, 4, {200, 2}) -- Sticks
 setRecipe(13, 241, 16, {216, 4}) -- Chains
-setRecipe(13, 242, 4, {221, 1}) -- String
+-- setRecipe(13, 242, 4, {221, 1}) -- String
 
 --[Furnace]--
 setCraftingTable(14, "FURNACE", 2, 5, 18, 14)
@@ -109,11 +110,13 @@ setRecipe(19, 117, 1, {217, 3, 226, 2}) -- Gold Axe
 setRecipe(19, 118, 1, {217, 1, 226, 2}) -- Gold Shovel
 setRecipe(19, 119, 1, {217, 2, 226, 2}) -- Gold Hoe
 
+--[[
 setRecipe(19, 120, 1, {218, 2, 226, 1}) -- Gem Sword
 setRecipe(19, 121, 1, {218, 3, 226, 2}) -- Gem Pickaxe
 setRecipe(19, 122, 1, {218, 3, 226, 2}) -- Gem Axe
 setRecipe(19, 123, 1, {218, 1, 226, 2}) -- Gem Shovel
 setRecipe(19, 124, 1, {218, 2, 226, 2}) -- Gem Hoe
+--]]
 
 -- Armors
 setRecipe(19, 304, 1, {241, 5}) -- Chainmail Helmet
@@ -131,18 +134,21 @@ setRecipe(19, 313, 1, {215, 8}) -- Gold Chestplate
 setRecipe(19, 314, 1, {215, 7}) -- Gold Leggings
 setRecipe(19, 315, 1, {215, 4}) -- Gold Boots
 
+--[[
 setRecipe(19, 316, 1, {218, 5}) -- Gem Helmet
 setRecipe(19, 317, 1, {218, 8}) -- Gem Chestplate
 setRecipe(19, 318, 1, {218, 7}) -- Gem Leggings
 setRecipe(19, 319, 1, {218, 4}) -- Gem Boots
+--]]
 
---[Oven]--
+--[[ Oven ]--
 setCraftingTable(20, "OVEN", 2, 5, 18, 14)
 setRecipe(20, 209, 1, {208, 3, 213, 1}) -- Bread
 setRecipe(20, 212, 1, {211, 1, 213, 1}) -- Cooked Beef
 setRecipe(20, 234, 1, {233, 1, 213, 1}) -- Cooked Pork
 setRecipe(20, 232, 1, {231, 1, 213, 1}) -- Baked Carrot
 setRecipe(20, 230, 1, {229, 1, 213, 1}) -- Baked Potato
+--]]
 
 function openCraftingMenu(id, inv, e, p1, p2, p3)
   local cTbl = getCraftingTables()

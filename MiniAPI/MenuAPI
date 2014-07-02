@@ -6,22 +6,11 @@ local worldName = "World"
 
 function formatString(str, n)
   if string.len(str) > n then
-    local sTbl = {}
-    local found = 0
-    local split = 0
-    str:gsub(".", function(c) table.insert(sTbl, c) end)
-    for i = 1, #sTbl do
-      if sTbl[i] == string.upper(sTbl[i]) and found == 1 then 
-        split = i
-        break
-      elseif sTbl[i] == string.upper(sTbl[i]) then
-        found = found + 1
-      end
+    local nString = ""
+    for j = 1, n - 2 do
+      nString = nString..string.char(str:byte(j))
     end
-    if split ~= 0 then
-      newStr = sTbl[1].. "" ..sTbl[2].. "" ..sTbl[split - 2].. "" ..sTbl[split - 1].. "" ..sTbl[split].. "" ..sTbl[split + 1].. "" ..sTbl[split + 2]
-      return newStr
-    end
+    return nString.. ".."
   else
     return str
   end

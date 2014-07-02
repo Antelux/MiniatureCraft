@@ -33,7 +33,7 @@ end
 --local lighted = setLightingMap()
 local sx, sy = term.getSize()
 
-function drawLighting(x,y,size,map,dim)
+function drawLighting(x,y,size,map,dim) -- Some... Horrible equations here... 
   term.setTextColor(colors.black)
   term.setBackgroundColor(colors.black)
   for i = 1, 360 do

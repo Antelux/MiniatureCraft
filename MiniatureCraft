@@ -1,3 +1,4 @@
+local MainFolder = "MiniatureCraft"
 if not term.isColor then
   error("Advanced Computer Required to Play.")
 end
@@ -5,11 +6,15 @@ end
 -- [Load the games API's, setting up the game's functions] --
 local sx, sy = term.getSize()
 local APIFolder = MainFolder.. "/MiniAPI"
-local MiniAPIs = fs.list(APIFolder)
-os.loadAPI(APIFolder.. "/LoadAPI")
+--local MiniAPIs = fs.list(APIFolder)
+
 os.loadAPI(APIFolder.. "/FileAPI")
+FileAPI.setMainDirectory(MainFolder) -- This can only be set once.
+
+os.loadAPI(APIFolder.. "/LoadAPI")
 local Assets = LoadAPI.loadAssets()
 local loadedMods = LoadAPI.loadMods()
+
 os.loadAPI(APIFolder.. "/LevelAPI")
 os.loadAPI(APIFolder.. "/PlayerAPI")
 --os.loadAPI(APIFolder.. "/EntityAPI")
