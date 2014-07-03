@@ -31,12 +31,14 @@ end
 local sx, sy = term.getSize()
 local nativeTerm = term.current()
 local APIFolder = MainFolder.. "/MiniAPI"
-local redirect = term.redirect
+--local redirect = term.redirect
 --local MiniAPIs = fs.list(APIFolder)
 
+--[[ Kinda buggy. Doesnt draw everything.
 os.loadAPI(APIFolder.. "/BufferAPI")
 local term = BufferAPI.createBuffer()
 redirect(term)
+--]]
 
 os.loadAPI(APIFolder.. "/FileAPI")
 FileAPI.setMainDirectory(MainFolder) -- This can only be set once.
@@ -194,7 +196,7 @@ function mainMenu()
       FileAPI.saveMap(overworld, LevelAPI.getWorldName())
       break
     end
-    term.drawScreen()
+    --term.drawScreen()
   end
 end
 
@@ -222,7 +224,7 @@ function updateAll()
     end
   end
 
-  term.drawScreen()
+  --term.drawScreen()
 end
 
 mainMenu()
