@@ -179,7 +179,6 @@ end
 
 function mainMenu()
   while true do
-    term.drawScreen()
     MenuAPI.mainMenu(e, p1, p2, p3)
     e, p1, p2, p3 = os.pullEvent()
     local run, mx, my = MenuAPI.mainMenu(e, p1, p2, p3)
@@ -195,6 +194,7 @@ function mainMenu()
       FileAPI.saveMap(overworld, LevelAPI.getWorldName())
       break
     end
+    term.drawScreen()
   end
 end
 

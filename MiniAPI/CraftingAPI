@@ -270,6 +270,7 @@ function openCraftingMenu(id, inv, e, p1, p2, p3)
     term.setCursorPos(w * 2 - 1, y + 1)
     term.write("x0")
   end
+  term.drawScreen()
 
   if ID ~= nil then
     return true, ID
