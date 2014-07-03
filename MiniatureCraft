@@ -32,7 +32,6 @@ local sx, sy = term.getSize()
 local nativeTerm = term.current()
 local APIFolder = MainFolder.. "/MiniAPI"
 local redirect = term.redirect
---local MiniAPIs = fs.list(APIFolder)
 
 os.loadAPI(APIFolder.. "/BufferAPI")
 local term = BufferAPI.createBuffer()
@@ -54,6 +53,7 @@ os.loadAPI(APIFolder.. "/CraftingAPI")
 os.loadAPI(APIFolder.. "/LightingAPI")
 
 --[[ Would use this, except some API's must be loaded first, whereas this doesnt do it
+local MiniAPIs = fs.list(APIFolder)
 for _, file in ipairs(MiniAPIs) do
   os.loadAPI(APIFolder.. "/" ..file)
   print("The " ..file.. " Was found, attempting to load.")
@@ -220,6 +220,7 @@ function updateAll()
       func()
     end
   end
+  BufferAPI.drawScreen()
 end
 
 mainMenu()
@@ -353,6 +354,7 @@ while true do
         if switch then
           selectedItem = nil
         end
+        BufferAPI.drawScreen()
         sleep(0.05)
         startTimers()
       end
