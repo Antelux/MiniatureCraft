@@ -217,5 +217,6 @@ function mainMenu(e, p1, p2, p3)
     end
   end
 
+  BufferAPI.drawScreen()
   return true
 end
