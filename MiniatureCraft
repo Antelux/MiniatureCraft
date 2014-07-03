@@ -1,7 +1,7 @@
 
 --[[
   MiniatureCraft, a game by Detective_Smith
-  Current Version: 1.1b
+  Current Version: 1.1c
 
   This game is under the Creative Commons Attribution-NonCommercial 4.0 
   International Public License which basically means that you are free to:
@@ -31,14 +31,12 @@ end
 local sx, sy = term.getSize()
 local nativeTerm = term.current()
 local APIFolder = MainFolder.. "/MiniAPI"
---local redirect = term.redirect
+local redirect = term.redirect
 --local MiniAPIs = fs.list(APIFolder)
 
---[[ Kinda buggy. Doesnt draw everything.
 os.loadAPI(APIFolder.. "/BufferAPI")
 local term = BufferAPI.createBuffer()
 redirect(term)
---]]
 
 os.loadAPI(APIFolder.. "/FileAPI")
 FileAPI.setMainDirectory(MainFolder) -- This can only be set once.
@@ -196,7 +194,6 @@ function mainMenu()
       FileAPI.saveMap(overworld, LevelAPI.getWorldName())
       break
     end
-    --term.drawScreen()
   end
 end
 
@@ -224,7 +221,7 @@ function updateAll()
     end
   end
 
-  --term.drawScreen()
+  BufferAPI.drawScreen()
 end
 
 mainMenu()
@@ -348,6 +345,8 @@ while true do
           startTimers()
           break
         end
+
+        BufferAPI.drawScreen()
       end
 
     elseif p1 == 57 then -- Spacebar, use items

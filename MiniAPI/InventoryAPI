@@ -89,7 +89,6 @@ function openInventory(inv, e, p1, p2, p3)
       return false, nil, selected
     end
     MenuAPI.menuList(2, 5, 18, 14, "INVENTORY", inv, selected) 
-    --term.drawScreen()
   end
 
   if ID ~= nil then

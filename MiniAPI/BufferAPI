@@ -277,3 +277,8 @@ function createBuffer(x, y, width, height, termIsColor)
 
     return termObject
 end
+
+function drawScreen(obj)
+    local obj = obj or term.current()
+    obj.drawScreen()
+end
