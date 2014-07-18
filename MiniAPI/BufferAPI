@@ -210,27 +210,14 @@ function createBuffer(x, y, width, height, termIsColor)
                     end
                 end
 
-                local function thereIsADifference(x, y)
-                    if termObject.screen[y] and termObject.oldScreen[y] then
-                        if termObject.screen[y][x] and termObject.oldScreen[y][x] then
-                            if termObject.screen[y][x].BColor ~= termObject.oldScreen[y][x].BColor or termObject.screen[y][x].TColor ~= termObject.oldScreen[y][x].TColor or termObject.screen[y][x].Char ~= termObject.oldScreen[y][x].Char then 
-                                return true 
-                            end
-                            return false
-                        else
-                            return true
-                        end
-                    else
-                        return true
-                    end
-                end
-
                 -- Organize colors so they only need to be set once when switched to
                 for i = 1, termObject.Height do
                     for j = 1, termObject.Width do
                         if termObject.screen[i] then
                             if termObject.screen[i][j] then
-                                checkColor(j, i, termObject.screen[i][j].BColor)
+                                if termObject.screen[i][j].BColor ~= termObject.oldScreen[i][j].BColor or termObject.screen[i][j].TColor ~= termObject.oldScreen[i][j].TColor or termObject.screen[i][j].Char ~= termObject.oldScreen[i][j].Char then
+                                    checkColor(j, i, termObject.screen[i][j].BColor)
+                                end
                             end
                         end
                     end
@@ -241,14 +228,12 @@ function createBuffer(x, y, width, height, termIsColor)
                     nativeTerm.setBackgroundColor(colorList[i].Color)
                     for j = 1, #colorList[i].Points do
                         local colX, colY = colorList[i].Points[j].X, colorList[i].Points[j].Y
-                        if thereIsADifference(colX, colY) then
-                            nativeTerm.setCursorPos(colX + (termObject.OffsetX - 1), colY + (termObject.OffsetY - 1))
-                            if termObject.screen[colY][colX].TColor ~= currentTColor then
-                                currentTColor = termObject.screen[colY][colX].TColor
-                                nativeTerm.setTextColor(currentTColor)
-                            end
-                            nativeTerm.write(termObject.screen[colY][colX].Char)
+                        nativeTerm.setCursorPos(colX + (termObject.OffsetX - 1), colY + (termObject.OffsetY - 1))
+                        if termObject.screen[colY][colX].TColor ~= currentTColor then
+                            currentTColor = termObject.screen[colY][colX].TColor
+                            nativeTerm.setTextColor(currentTColor)
                         end
+                        nativeTerm.write(termObject.screen[colY][colX].Char)
                     end
                 end
             end
