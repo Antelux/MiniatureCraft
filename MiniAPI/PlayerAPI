@@ -1,7 +1,5 @@
 local Assets = LoadAPI.getAssets()
 local playerX, playerY = 0, 0
-local playerName = "Player"
-local playerColor = colors.red
 local playerDirection = 1
 local playerHealth = 20
 local playerDefence = 0
@@ -12,8 +10,8 @@ local playerMode = 0
 function newPlayerPos(map, dim)
   local mx, my = LevelAPI.getWorldSize()
   --while true do
-    local px = math.random(-64, 64) 
-    local py = math.random(-64, 64) 
+    local px = math.random(mx, my) 
+    local py = math.random(mx, my) 
     --if map[dim][2][px][py].bgT == nil then
       --if map[dim][1][px][py] ~= Assets[13] then
         return px, py
@@ -23,6 +21,9 @@ function newPlayerPos(map, dim)
 end
 
 function updatePlayer(map,dim,ox,oy)
+  local playerData = FileAPI.getPlayerSettings()
+  local playerColor = playerData.playerColor
+
   LevelAPI.updateMap(map,dim,ox,oy)
   if LevelAPI.getBackgroundColor(map,dim,playerX,playerY) == playerColor then
     if playerColor == 1 then
@@ -278,12 +279,13 @@ end
 
 function setPlayerName(str)
   if type(str) == "string" then
-    playerName = str
+    FileAPI.setPlayerSetting("playerName", str)
   end
 end
 
 function getPlayerName()
-  return playerName
+  local playerData = FileAPI.getPlayerSettings()
+  return playerData.playerName
 end
 
 function getPlayerMode()
@@ -293,5 +295,16 @@ end
 function setPlayerMode(n)
   if n == 0 or n == 1 then
     playerMode = n
+  end
+end
+
+function getPlayerColor()
+  local playerData = FileAPI.getPlayerSettings()
+  return playerData.playerColor
+end
+
+function setPlayerColor(c)
+  if type(c) == "number" then
+    FileAPI.setPlayerSetting("playerColor", c)
   end
 end

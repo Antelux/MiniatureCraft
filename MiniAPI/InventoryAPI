@@ -1,6 +1,7 @@
 local Assets = LoadAPI.getAssets()
+local playerInventory = {}
 
-function newInventory(size)
+function newInventory(size) -- The glorified table.
   newInventory = {}
   
   if size then
@@ -62,8 +63,6 @@ function checkInventory(inv, id)
       return true, inv[i].Amount, i
     end
   end
-
-  return false
 end
 
 local selected = 1
@@ -95,5 +94,15 @@ function openInventory(inv, e, p1, p2, p3)
     return true, ID, selected
   else
     return true, nil, 1
+  end
+end
+
+function getPlayerInventory()
+  return playerInventory
+end
+
+function setPlayerInventory(inv)
+  if type(inv) == "table" then
+    playerInventory = inv
   end
 end

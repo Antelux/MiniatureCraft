@@ -1,6 +1,15 @@
 -- Directorys
 local MainFolder 
 local fileDirectory = {}
+local serverList = {}
+local playerData = {
+  playerName = "Player",
+  playerColor = colors.red,
+  graphicsType = "Fancy",
+  useAnimations = true,
+  useBuffer = true,
+  doLighting = false -- HEAVILY RECOMMENDED THIS IS KEPT OFF! If enabled, it will cause MAJOR LAG when underground. Use at your own risk!
+}
 
 local function yield()
   os.queueEvent("sleep")
@@ -25,9 +34,6 @@ function setMainDirectory(path)
         fs.makeDir(fileDirectory[i])
       end
     end
-    
-  else
-    error("Main Directory Already Set!")
   end
 end
 
@@ -55,9 +61,32 @@ function getConfigDirectory()
 	return fileDirectory[5]
 end
 
-function saveMap(map)
-  local folderName = LevelAPI.getWorldName()
-  local SavesFolder = fileDirectory[4]
+function newMap(name, mx, my)
+  --[Sets the player's inventory, adding 3 things to it]--
+  local playerInventory = InventoryAPI.newInventory()
+  InventoryAPI.addItem(playerInventory, 150, 1)
+  InventoryAPI.addItem(playerInventory, 223, 1)
+  InventoryAPI.addItem(playerInventory, 210, 3)
+  
+  LevelAPI.setWorldSize(mx, my)
+  local sx, sy = term.getSize()
+  local newLevel = LevelAPI.newWorld(mx, my)
+  local px, py = PlayerAPI.newPlayerPos(newLevel, currentDim)
+  local ox, oy = LevelAPI.getOffset()
+  local pxo, pyo = px - math.floor(sx / 2), py - math.floor(sy / 2)
+  local worldname = name or LevelAPI.getWorldName()
+  local invNum = 1
+
+  PlayerAPI.setPlayerCoordinates(px, py)
+  LevelAPI.setOffset(pxo, pyo)
+  saveMap(newLevel, worldname)
+
+  return newWorld, playerInventory, invNum
+end
+
+function saveMap(map, name)
+  local folderName = name or LevelAPI.getWorldName()
+  local SavesFolder = getSavesDirectory()
   local WorldX, WorldY = LevelAPI.getWorldSize()
   if fs.exists(SavesFolder.. "/" ..folderName) then
     fs.delete(SavesFolder.. "/" ..folderName)
@@ -107,7 +136,7 @@ function saveMap(map)
 end
 
 function loadMap(name)
-  local SavesFolder = fileDirectory[4]
+  local SavesFolder = getSavesDirectory()
   local loadingConfig = fs.open(SavesFolder.. "/" ..name.. "/world.config", "r")
   local loadedConfig = loadingConfig.readAll()
   local configData = textutils.unserialize(loadedConfig)
@@ -120,9 +149,10 @@ function loadMap(name)
   PlayerAPI.setPlayerMode(configData.playerM)
   LevelAPI.setOffset(configData.offsetX, configData.offsetY)
 
-  local newMap = setMap(configData.mapX, configData.mapY)
+  local newMap = LevelAPI.setMap(configData.mapX, configData.mapY)
   LevelAPI.setWorldSize(configData.mapX, configData.mapY)
   local loadingMap = fs.open(SavesFolder.. "/" ..name.. "/world.data", "r")
+  local Assets = LoadAPI.loadAssets()
 
   for i = -1, 0 do
     yield()
@@ -154,5 +184,87 @@ function loadMap(name)
     end
   end
   loadingMap.close()
-  return newMap
+  
+  local playerInventory = InventoryAPI.newInventory()
+  InventoryAPI.addItem(playerInventory, 150, 1)
+  InventoryAPI.addItem(playerInventory, 223, 1)
+  InventoryAPI.addItem(playerInventory, 210, 3)
+
+  return newMap, playerInventory, 1
+end
+
+local function saveServerList()
+  fs.delete(getMainDirectory().. "/servers.data")
+  local saveServerList = fs.open(getMainDirectory().. "/servers.data", "w")
+  saveServerList.write(textutils.serialize(serverList))
+  saveServerList.close()
+end
+
+local function loadServerList()
+  local serverListRaw = fs.open(getMainDirectory().. "/servers.data", "r")
+  local serverListed = textutils.unserialize(serverListRaw.readAll())
+  serverListRaw.close()
+  serverList = serverListed or {}
+end
+
+function getServerList()
+  loadServerList()
+  return serverList
+end
+
+function addToServerList(name, id, channel)
+  if name and id and channel then
+    local n = #serverList + 1
+    serverList[n] = {}
+    serverList[n].name = name
+    serverList[n].id = id
+    serverList[n].channel = channel
+  end
+  saveServerList()
+  loadServerList()
+end
+
+function removeFromServerList(name, id, channel)
+  local remove = {}
+  if name and id and channel then
+    for i = 1, #serverList do
+      if serverList[i].name == name and serverList[i].id == id and serverList[i].channel == channel then
+        remove[#remove + 1] = i
+      end
+    end
+  end
+
+  for i = 1, #remove do
+    table.remove(serverList, remove[i])
+  end
+
+  saveServerList()
+  loadServerList()
+end
+
+local function savePlayerSettings()
+  local file = fs.open(getMainDirectory().. "/settings.data", "w")
+  file.write(textutils.serialize(playerData))
+  file.close()
+end
+
+function getPlayerSettings()
+  if not fs.exists(getMainDirectory().. "/settings.data") then
+    local file = fs.open(getMainDirectory().. "/settings.data", "w")
+    file.write(textutils.serialize(playerData))
+    file.close()
+  end
+
+  local file = fs.open(getMainDirectory().. "/settings.data", "r")
+  local data = textutils.unserialize(file.readAll())
+  file.close()
+
+  return data
+end
+
+function setPlayerSetting(setting, value)
+  if playerData[setting] then
+    playerData[setting] = value
+  end
+  savePlayerSettings()
 end

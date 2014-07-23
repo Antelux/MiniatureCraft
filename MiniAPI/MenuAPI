@@ -1,8 +1,5 @@
 local Assets = LoadAPI.getAssets()
 local sx, sy = term.getSize()
-local selected = 1
-local subMenu, subName
-local worldName = "World"
 
 function formatString(str, n)
   if string.len(str) > n then
@@ -98,6 +95,15 @@ function menuList(x,y,w,h,str,tab,sel)
   end
 end
 
+--[String splitter]--
+function splitString(str, sep)
+  local sep, result = sep or "%s", {}
+  for output in string.gmatch(str, "([^"..sep.."]+)") do
+    result[#result + 1] = output
+  end
+  return result
+end
+
 if sx < sy then
   demoMapX = sy
 else
@@ -107,116 +113,684 @@ end
 LevelAPI.setWorldSize(-demoMapX,demoMapX)
 local demoMap = LevelAPI.newWorld(-demoMapX, demoMapX)
 
-local options = {
-  "NEW WORLD",
-  "LOAD WORLD",
-  "OPTIONS"
-}
+--[Menu to make worlds]--
+function sizeMenu()
+  local wSelected = 1
+  local levelName = "World"
 
-local sizeOptions = {
-  [1] = {str = "SMALL (64 x 64)", sizeX = -64, sizeY = 64},
-  [2] = {str = "MEDIUM (128 x 128)", sizeX = -128, sizeY = 128},
-  [3] = {str = "LARGE (256 x 256)", sizeX = -256, sizeY = 256}
-}
+  local sizeOptions = {
+    [1] = {str = "SMALL (64)", size = 64},
+    [2] = {str = "MEDIUM (128)", size = 128},
+    [3] = {str = "LARGE (256)", size = 256}
+  }
 
-local optionOptions = {
-  [1] = {str = "NAME:"},
-  [2] = {str = "COLOR:"},
-  [3] = {str = "GRAPHICS:"}
-}
+  function draw()
+    LevelAPI.updateMap(demoMap, 0, 0, 0)
+    createMenu(7, 4, sx / 2, sy - 6, "WORLD OPTIONS")
+    term.setTextColor(colors.lightGray)
 
-local graphicOptions = {
-  [1] = {str = "FASTEST"},
-  [2] = {str = "FAST"},
-  [3] = {str = "FANCY"}
-}
+    for i = 1, #sizeOptions do
+      term.setCursorPos(9, 4 + i)
+      if i == wSelected then
+        print("[" ..sizeOptions[i].str.. "]")
+      else
+        print(sizeOptions[i].str)
+      end
+    end
+    term.setCursorPos(8, sy - 4)
+    term.write("World Name:")
 
+    term.setTextColor(colors.white)
+    term.setCursorPos(7, sy - 5)
+    term.write("+")
+    for i = 1, (sx / 2) - 2 do
+      term.write("-")
+    end
+    term.write("+")
+    term.setCursorPos((sx / 2) - 6, sy - 4)
+    term.write("|")
+
+    paintutils.drawLine(19, sy - 4, (sx / 2) + 5, sy - 4, colors.gray)
+    term.setCursorPos(19, sy - 4)
+    term.write(levelName)
+    BufferAPI.drawScreen()
+  end
+
+  draw()
+  while true do
+    e, p1, p2, p3, p4 = os.pullEvent()
+
+    if e == "key" then 
+      if p1 == 17 or p1 == 200 then -- Up Key
+        wSelected = wSelected - 1
+        if wSelected < 1 then
+          wSelected = #sizeOptions or 0
+        end  
+
+      elseif p1 == 31 or p1 == 208 then -- Down Key 
+        wSelected = wSelected + 1
+        if wSelected > #sizeOptions then
+          wSelected = 1
+        end
+        
+      elseif p1 == 28 then -- Enter
+        local levelSize = sizeOptions[wSelected].size
+        return levelName, -levelSize, levelSize
+
+      elseif p1 == 14 then -- Backspace
+        break
+      end
+
+      draw()
+    elseif e == "mouse_click" then
+      if p2 >= 19 and p2 <= (sx / 2) + 5 and p3 == sy - 4 then
+        paintutils.drawLine(19, sy - 4, (sx / 2) + 5, sy - 4, colors.gray)
+        term.setCursorPos(19, sy - 4)
+        BufferAPI.drawScreen()
+        local input = read(_, _, 15)
+        if input ~= "" then
+          levelName = input
+        end
+      end
+      draw()
+    end
+  end
+end
+
+--[Singleplayer menu]--
+function singeplayerMenu()
+  local sSelected = 1
+
+  local function draw()
+    local menuList = fs.list(FileAPI.getSavesDirectory())
+
+    LevelAPI.updateMap(demoMap, 0, 0, 0)
+    createMenu(7, 4, sx / 2, sy - 6, "SINGLEPLAYER")
+    term.setTextColor(colors.lightGray)
+
+    for i = 1, #menuList do
+      term.setCursorPos(9, 4 + i)
+      if i == sSelected then
+        print("[" ..menuList[i].. "]")
+      else
+        print(menuList[i])
+      end
+    end
+    
+    term.setCursorPos(12, sy - 4)
+    term.write("NEW")
+    term.setCursorPos((sx / 2) - 3, sy - 4)
+    term.write("DELETE")
+
+    term.setTextColor(colors.white)
+    term.setCursorPos(7, sy - 5)
+    term.write("+")
+    for i = 1, (sx / 2) - 2 do
+      term.write("-")
+    end
+    term.write("+")
+    term.setCursorPos((sx / 2) - 6, sy - 4)
+    term.write("|")
+
+    BufferAPI.drawScreen()
+  end
+
+  draw()
+
+  while true do
+    local worldName = "World"
+    e, p1, p2, p3, p4 = os.pullEvent()
+    
+    local menuList = fs.list(FileAPI.getSavesDirectory())
+
+    if e == "key" then 
+      if p1 == 17 or p1 == 200 then -- Up Key
+        sSelected = sSelected - 1
+        if sSelected < 1 then
+          sSelected = #menuList or 0
+        end  
+
+      elseif p1 == 31 or p1 == 208 then -- Down Key 
+        sSelected = sSelected + 1
+        if sSelected > #menuList then
+          sSelected = 1
+        end
+        
+      elseif p1 == 28 then -- Enter
+        return {type = "Load", name = menuList[sSelected]}
+
+      elseif p1 == 14 then -- Backspace
+        break
+      end
+
+      draw()
+    elseif e == "mouse_click" then
+      if p3 == sy - 4 then
+        if p2 > 7 and p2 < (sx / 2) - 7 then -- Make new world
+          worldName, mx, my = sizeMenu()
+          if worldName then
+            FileAPI.newMap(worldName, mx, my)
+          end
+          sSelected = 1
+          draw()
+        elseif p2 > (sx / 2) - 6 and p2 < (sx / 2) + 5 then -- Delete a world
+          fs.delete(FileAPI.getSavesDirectory().. "/" ..menuList[sSelected])
+          local menuList = fs.list(FileAPI.getSavesDirectory())
+          if #menuList > 0 then
+            sSelected = 1
+          else
+            sSelected = 0
+          end
+          draw()
+        end
+      end
+    end
+  end
+end
+
+--[Erroring for multiplayer]--
+function multiplayerError(str)
+  term.setBackgroundColor(colors.black)
+  term.clear()
+  createMenu(6, 4, (sx / 2) + 16, sy - 6, "SERVER CONNECTION LOST")
+  term.setTextColor(colors.red)
+  term.setCursorPos(8, 6)
+  term.write("Error: ")
+  term.setTextColor(colors.lightGray)
+  term.write(str)
+  term.setCursorPos(8, 7)
+  term.setTextColor(colors.yellow)
+  term.write("Press anything to continue.")
+  BufferAPI.drawScreen()
+
+  os.pullEvent()
+end
+
+--[Connect screen for multiplayer]-- Finish later
+function multiplayerConnect()
+  createMenu(6, 4, (sx / 2) + 16, sy - 6, "CONNECTING...")
+  term.write("Press anything to continue.")
+  BufferAPI.drawScreen()
+end
+
+--[Lets a user add a new server]--
+function serverMenu()
+  local serverName = "New Server"
+  local serverAddress = "0:0"
+
+  function draw()
+    LevelAPI.updateMap(demoMap, 0, 0, 0)
+    createMenu(7, 4, sx / 2, sy - 6, "NEW SERVER")
+    term.setTextColor(colors.lightGray)
+    term.setCursorPos(8, sy - 13)
+    term.write("SERVER NAME:")
+    term.setCursorPos(8, sy - 11)
+    term.write("SERVER ADDRESS:")
+    term.setCursorPos((sx / 2) - 9, sy - 4)
+    term.write("CREATE")
+
+    term.setTextColor(colors.white)
+    term.setCursorPos(7, sy - 5)
+    term.write("+")
+    for i = 1, (sx / 2) - 2 do
+      term.write("-")
+    end
+    term.write("+")
+
+    paintutils.drawLine(8, sy - 12, (sx / 2) + 5, sy - 12, colors.gray)
+    paintutils.drawLine(8, sy - 10, (sx / 2) + 5, sy - 10, colors.gray)
+    term.setCursorPos(8, sy - 12)
+    term.write(serverName)
+    term.setCursorPos(8, sy - 10)
+    term.write(serverAddress)
+    BufferAPI.drawScreen()
+  end
+
+  draw()
+  while true do
+    e, p1, p2, p3, p4 = os.pullEvent()
+
+    if e == "key" then
+      if p1 == 14 then -- Backspace
+        break
+      end
+    elseif e == "mouse_click" then
+      if p2 >= 8 and p2 <= (sx / 2) + 5 then
+        if p3 == sy - 12 then
+          paintutils.drawLine(8, sy - 12, (sx / 2) + 5, sy - 12, colors.gray)
+          term.setCursorPos(8, sy - 12)
+          BufferAPI.drawScreen()
+          local inputedName = read(_, _, 15)
+          if inputedName ~= "" then
+            serverName = inputedName
+          end
+          draw()
+        elseif p3 == sy - 10 then
+          paintutils.drawLine(8, sy - 10, (sx / 2) + 5, sy - 10, colors.gray)
+          term.setCursorPos(8, sy - 10)
+          BufferAPI.drawScreen()
+          local inputedAddress = read()
+          if inputedAddress ~= "" then
+            serverAddress = inputedAddress
+          end
+          draw()
+        elseif p3 == sy - 4 then
+          local serverData = splitString(serverAddress, ":")
+          return serverName, tonumber(serverData[1]), tonumber(serverData[2])
+        end
+      end
+      draw()
+    end
+  end
+end
+
+--[Multiplayer Menu]--
+function multiplayerMenu()
+local mSelected = 1
+
+  local function draw()
+    local serverList = FileAPI.getServerList()
+    LevelAPI.updateMap(demoMap, 0, 0, 0)
+    createMenu(7, 4, (sx / 2), sy - 6, "MULTIPLAYER")
+    term.setTextColor(colors.lightGray)
+
+    for i = 1, #serverList do
+      term.setCursorPos(8, 4 + i)
+      if i == mSelected then
+        print("[" ..serverList[i].name.. "] (" ..serverList[i].id.. ":" ..serverList[i].channel.. ")")
+      else
+        print(serverList[i].name.. " (" ..serverList[i].id.. ":" ..serverList[i].channel.. ")")
+      end
+    end
+    
+    term.setCursorPos(12, sy - 4)
+    term.write("NEW")
+    term.setCursorPos((sx / 2) - 3, sy - 4)
+    term.write("DELETE")
+
+    term.setTextColor(colors.white)
+    term.setCursorPos(7, sy - 5)
+    term.write("+")
+    for i = 1, (sx / 2) - 2 do
+      term.write("-")
+    end
+    term.write("+")
+    term.setCursorPos((sx / 2) - 6, sy - 4)
+    term.write("|")
+
+    BufferAPI.drawScreen()
+  end
+
+  draw()
+
+  while true do
+    e, p1, p2, p3, p4 = os.pullEvent()
+    
+    local serverList = FileAPI.getServerList()
+
+    if e == "key" then 
+      if p1 == 17 or p1 == 200 then -- Up Key
+        mSelected = mSelected - 1
+        if mSelected < 1 then
+          mSelected = #serverList or 0
+        end  
+
+      elseif p1 == 31 or p1 == 208 then -- Down Key 
+        mSelected = mSelected + 1
+        if mSelected > #serverList then
+          mSelected = 1
+        end
+        
+      elseif p1 == 28 then -- Enter
+        return {type = "Multiplayer", id = serverList[mSelected].id, channel = serverList[mSelected].channel}
+
+      elseif p1 == 14 then -- Backspace
+        break
+      end
+
+      draw()
+    elseif e == "mouse_click" then
+      if p3 == sy - 4 then
+        if p2 > 7 and p2 < (sx / 2) - 7 then -- Add a new Server
+          local sName, sID, sChannel = serverMenu()
+          if sName and sID and sChannel then
+            FileAPI.addToServerList(sName, sID, sChannel)
+            mSelected = 1
+          end
+          draw()
+        elseif p2 > (sx / 2) - 6 and p2 < (sx / 2) + 5 then -- Delete a server
+          FileAPI.removeFromServerList(serverList[mSelected].name, serverList[mSelected].id, serverList[mSelected].channel)
+          mSelected = 1
+          draw()
+        end
+      end
+    end
+  end
+end
+
+--[Options Menu]--
+function optionsMenu()
+  local colorLookup = {[1] = 1, [2] = 2, [3] = 4, [4] = 8, [5] = 16, [6] = 32, [7] = 64, [8] = 128, [9] = 256, [10] = 512, [11] = 1024, [12] = 2048, [13] = 4096, [14] = 8192, [15] = 16384, [16] = 32768}
+  local playerData = FileAPI.getPlayerSettings()
+  local playerName = playerData.playerName
+  local playerColor = playerData.playerColor
+  local graphicState = playerData.graphicsType
+  local animationState = playerData.useAnimations
+  local bufferState = playerData.useBuffer
+  local sSelected = 1
+
+  local graphicMenu = {
+    [1] = {str = "GRAPHICS", val = graphicState},
+    [2] = {str = "ANIMATIONS", val = animationState},
+    [3] = {str = "USE BUFFER", val = bufferState}
+  }
+
+  function draw()
+    LevelAPI.updateMap(demoMap, 0, 0, 0)
+    createMenu(7, 4, sx / 2, sy - 6, "OPTIONS")
+    term.setTextColor(colors.lightGray)
+    term.setCursorPos(8, sy - 14)
+    term.write("PLAYER NAME:")
+    term.setCursorPos(8, sy - 11)
+    term.write("PLAYER COLOR:")
+    term.setCursorPos((sx / 2) - 11, sy - 4)
+    term.write("CONTINUE")
+
+    for i = 1, #graphicMenu do
+      term.setCursorPos(8, sy - (9 - i))
+      term.setTextColor(colors.lightGray)
+      if i == sSelected then
+        term.write("[" ..graphicMenu[i].str.. "]: ") 
+      else
+        term.write(graphicMenu[i].str.. ": ") 
+      end
+      term.setTextColor(colors.white)
+      term.write(tostring(graphicMenu[i].val))
+    end
+
+    term.setTextColor(colors.white)
+    term.setCursorPos(7, sy - 5)
+    term.write("+")
+    for i = 1, (sx / 2) - 2 do
+      term.write("-")
+    end
+    term.write("+")
+
+    paintutils.drawLine(8, sy - 13, (sx / 2) + 5, sy - 13, colors.gray)
+    term.setCursorPos(8, sy - 13)
+    term.write(playerName)
+
+    local c = 1
+    if c == colors.black then
+      term.setTextColor(colors.white)
+    else 
+      term.setTextColor(colors.black)
+    end
+    
+    for i = 1, 16 do
+      paintutils.drawPixel(10 + i, sy - 10, c)
+      if c == playerColor then
+        term.setCursorPos(10 + i, sy - 10)
+        term.write("X")
+      end
+      c = c * 2
+    end
+
+    BufferAPI.drawScreen()
+  end
+
+  draw()
+  while true do
+    e, p1, p2, p3, p4 = os.pullEvent()
+
+    if e == "key" then 
+      if p1 == 17 or p1 == 200 then -- Up Key
+        sSelected = sSelected - 1
+        if sSelected < 1 then
+          sSelected = #graphicMenu or 0
+        end  
+
+      elseif p1 == 31 or p1 == 208 then -- Down Key 
+        sSelected = sSelected + 1
+        if sSelected > #graphicMenu then
+          sSelected = 1
+        end
+        
+      elseif p1 == 28 then -- Enter
+        if sSelected == 1 then
+          if graphicMenu[sSelected].val == "Fast" then
+            graphicMenu[sSelected].val = "Fancy"
+          elseif graphicMenu[sSelected].val == "Fancy" then
+            graphicMenu[sSelected].val = "Fast"
+          end
+        else
+          graphicMenu[sSelected].val = not graphicMenu[sSelected].val
+        end
+
+        FileAPI.setPlayerSetting("graphicsType", graphicMenu[1].val)
+        FileAPI.setPlayerSetting("useAnimations", graphicMenu[2].val)
+
+      elseif p1 == 14 then -- Backspace
+        break
+      end
+      draw()
+
+    elseif e == "mouse_click" then
+      if p2 >= 8 and p2 <= (sx / 2) + 5 then
+        if p3 == sy - 13 then
+          paintutils.drawLine(8, sy - 13, (sx / 2) + 5, sy - 13, colors.gray)
+          term.setCursorPos(8, sy - 13)
+          term.setTextColor(colors.white)
+          BufferAPI.drawScreen()
+          local inputedName = read(_, _, 15)
+          if inputedName ~= "" then
+            playerName = inputedName
+          end
+          draw()
+        elseif p3 == sy - 4 then
+          FileAPI.setPlayerSetting("playerName", playerName)
+          FileAPI.setPlayerSetting("playerColor", playerColor)
+          FileAPI.setPlayerSetting("useBuffer", graphicMenu[3].val)
+          break
+        end
+      end
+
+      if p2 >= 11 and p2 <= 28 then
+        if p3 == sy - 10 then
+          local number = p2 - 10
+          playerColor = colorLookup[number]
+        end
+      end
+      draw()
+    end
+  end
+end
+
+--[Mods Menu]--
+function modsMenu()
+  local sSelected = 1
+
+  local function draw()
+    local menuList = fs.list(FileAPI.getModsDirectory())
+
+    LevelAPI.updateMap(demoMap, 0, 0, 0)
+    createMenu(7, 4, sx / 2, sy - 6, "INSTALLED MODS")
+    term.setTextColor(colors.lightGray)
+
+    local sx, ex = 1
+    if #menuList ~= 0 then
+      if #menuList <= (sx / 2) - 2 then
+        ex = #menuList
+      elseif #menuList > (sx / 2) - 2 then
+        local diff = #menuList - (sx / 2) - 2
+        sx, ex = sx + diff + (sSelected - 1), ex + diff + (sSelected - 1)
+      end
+    else
+      ex = 0
+    end
+
+    for i = sx, ex do
+      term.setCursorPos(9, 4 + i)
+      if i == sSelected then
+        print("[" ..menuList[i].. "]")
+      else
+        print(menuList[i])
+      end
+    end
+
+    BufferAPI.drawScreen()
+  end
+
+  draw()
+
+  while true do
+    e, p1, p2, p3, p4 = os.pullEvent()
+    
+    local menuList = fs.list(FileAPI.getModsDirectory())
+
+    if e == "key" then 
+      if p1 == 17 or p1 == 200 then -- Up Key
+        sSelected = sSelected - 1
+        if sSelected < 1 then
+          sSelected = #menuList or 0
+        end  
+
+      elseif p1 == 31 or p1 == 208 then -- Down Key 
+        sSelected = sSelected + 1
+        if sSelected > #menuList then
+          sSelected = 1
+        end
+
+      elseif p1 == 14 then -- Backspace
+        break
+      end
+
+      draw()
+    end
+  end
+end
+
+--[Exit function]--
+function exit()
+  term.setBackgroundColor(colors.black)
+  term.setTextColor(colors.white)
+  term.clear()
+  term.setCursorPos(1, 1)
+  BufferAPI.drawScreen()
+
+  local MiniAPIs = fs.list(FileAPI.getAPIDirectory())
+  for _, file in ipairs(MiniAPIs) do
+    os.unloadAPI(FileAPI.getAPIDirectory().. "/" ..file)
+  end
+
+  return {type = "Exit"}
+end
+
+--[Main Menu]--
+local selected = 1
 function mainMenu(e, p1, p2, p3)
+
+  local mainOptions = {
+    [1] = {str = "SINGLEPLAYER", menu = singeplayerMenu},
+    [2] = {str = "MULTIPLAYER", menu = multiplayerMenu},
+    [3] = {str = "OPTIONS", menu = optionsMenu},
+    [4] = {str = "MODS", menu = modsMenu},
+    [5] = {str = "EXIT", menu = exit}
+  }
+
   if e == "key" then 
     if p1 == 17 or p1 == 200 then -- Up Key
-      selected = selected + 1
-      if selected > #options then
-        selected = 1
-      end
-
-    elseif p1 == 31 or p1 == 208 then -- Down Key 
       selected = selected - 1
       if selected < 1 then
-        selected = #options
+        selected = #mainOptions
       end  
+
+    elseif p1 == 31 or p1 == 208 then -- Down Key 
+      selected = selected + 1
+      if selected > #mainOptions then
+        selected = 1
+      end
       
-    elseif p1 == 28 or p1 == 18 then -- Enter, E
-      if not subMenu then
-        if selected == 1 then
-          selected = 1
-          subMenu, subName, subTab = true, "SIZE", sizeOptions
-        elseif selected == 3 then
-          selected = 3
-          subMenu, subName, subTab = true, "SETTINGS", optionOptions
-        end
-        oldSelected = selected
-      else
-        if oldSelected == 1 then 
-          LevelAPI.setWorldName(worldName)
-          return false, sizeOptions[selected].sizeX, sizeOptions[selected].sizeY
-        elseif oldSelected == 3 then
-          local m
-        end
-      end
-
-    elseif p1 == 14 or p1 == 16 then -- Enter, Q, or p1 == (Esc Key) then 
-      selected = oldSelected
-      subMenu, subName = false, nil
-    end
-
-  elseif e == "mouse_click" then
-    if oldSelected == 1 and subMenu then
-      if p2 >= 23 and p2 <= 22 + #subName * 5 and p3 == 13 then
-        paintutils.drawLine(23,13,22 + #subName * 5,13,colors.gray)
-        term.setTextColor(colors.lightGray)
-        term.setCursorPos(23,13)  
-        worldName = read()      
-        if worldName == "" then
-          worldName = "World"
-        end
+    elseif p1 == 28 then -- Enter
+      local returnValue = mainOptions[selected].menu()
+      
+      if returnValue then
+        return returnValue
       end
     end
-  end
 
-  if not subMenu then
-    LevelAPI.updateMap(demoMap,0,0,0)
-    createMenu(7,4,sx - 12,sy - 6, "MINIATURECRAFT")
+    LevelAPI.updateMap(demoMap, 0, 0, 0)
+    createMenu(7, 4, sx / 2, sy - 6, "MINIATURECRAFT")
     term.setTextColor(colors.lightGray)
-    for i = 1, #options do
-        term.setCursorPos(9, 4 + i)
-        if i == selected then
-          print("[" ..options[i].. "]")
-        else
-          print(options[i])
-        end
-    end
-  end
-
-  if subMenu then
-    createMenu(22,6,#subName * 5 + 2,#subTab + 2, subName)
-    term.setTextColor(colors.lightGray)
-    for i = 1, #subTab do
-      term.setCursorPos(23, 6 + i)
+    for i = 1, #mainOptions do
+      term.setCursorPos(9, 4 + i)
+      print(mainOptions[i].str)
       if i == selected then
-        print("[" ..subTab[i].str.. "]")
-      else
-        print(subTab[i].str)
+        term.setCursorPos(8, 4 + i)
+        term.write("[")
+        term.setCursorPos(21, 4 + i)
+        term.write("]")
       end
     end
-    if oldSelected == 1 then
-      createMenu(22,12,#subName * 5 + 2,3, "LEVEL-NAME")
-      paintutils.drawLine(23,13,22 + #subName * 5,13,colors.gray)
-      term.setTextColor(colors.lightGray)
-      term.setCursorPos(23,13)
-      print(worldName)
-    end
-  end
 
-  BufferAPI.drawScreen()
-  return true
+    paintutils.drawLine(1, sy, sx, sy, colors.gray)
+    term.setCursorPos(1, sy)
+    term.setTextColor(colors.white)
+    term.write("MiniatureCraft, By Detective_Smith.")
+    BufferAPI.drawScreen()
+  end
+end
+
+--[Pause Menu]--
+local pSelected = 1
+function pauseMenu(world, e, p1, p2, p3)
+
+  local pauseOptions = {
+    [1] = {str = "RETURN TO GAME", menu = function() return "Exit" end},
+    [2] = {str = "OPTIONS", menu = optionsMenu},
+    [3] = {str = "MODS", menu = modsMenu},
+    [4] = {str = "EXIT", menu = function() return "ExitGame" end }
+  }
+
+  if e == "key" then 
+    if p1 == 17 or p1 == 200 then -- Up Key
+      pSelected = pSelected - 1
+      if pSelected < 1 then
+        pSelected = #pauseOptions
+      end  
+
+    elseif p1 == 31 or p1 == 208 then -- Down Key 
+      pSelected = pSelected + 1
+      if pSelected > #pauseOptions then
+        pSelected = 1
+      end
+      
+    elseif p1 == 28 then -- Enter
+      local returnValue = pauseOptions[pSelected].menu()
+      
+      if returnValue then
+        return returnValue
+      end
+      pSelected = 1
+
+    elseif p1 == 14 then -- Backspace
+      pSelected = 1
+      return "Exit"
+    end
+
+    LevelAPI.updateMap(world, PlayerAPI.getPlayerDim(), LevelAPI.getOffset())
+    createMenu(7, 4, sx / 2, sy - 6, "PAUSE MENU")
+    term.setTextColor(colors.lightGray)
+    for i = 1, #pauseOptions do
+      term.setCursorPos(9, 4 + i)
+      print(pauseOptions[i].str)
+      if i == pSelected then
+        term.setCursorPos(8, 4 + i)
+        term.write("[")
+        term.setCursorPos(23, 4 + i)
+        term.write("]")
+      end
+    end
+    BufferAPI.drawScreen()
+  end
 end

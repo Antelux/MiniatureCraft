@@ -2,7 +2,7 @@ local MainFolder = FileAPI.getMainDirectory()
 local AssetsFolder = FileAPI.getAssetsDirectory()
 local SavesFolder = FileAPI.getSavesDirectory()
 local Assets = LoadAPI.getAssets()
-local animationEnabled = false
+local changeAnimation = false
 local OffsetX, OffsetY = 0, 0
 local WorldX, WorldY
 local worldSaveName
@@ -269,78 +269,105 @@ end
 
 --[Updates the map aswell as redrawing it]--
 function updateMap(map, dim, ox, oy)
+  local graphicData = FileAPI.getPlayerSettings()
   local sx, sy = term.getSize()
+  local current = term.current()
+  local drawToBuffer = false
   local lbT = 1
   local lbC = 1
   local lbX = 0
   local lbX2 = 0
 
-  if animationEnabled then
-    animationEnabled = false
-  else
-    animationEnabled = true
+  if current["screen"] then
+    drawToBuffer = true
   end
 
-  --[[ -- This will be for fastest graphics 
-  for j = 1, sy do 
-    for i = 1, sx do 
-      local mx = i + ox
-      local my = j + oy
-      if mx > WorldY then
-        mx = WorldY
-      end
-      if mx < WorldX then
-        mx = WorldX 
-      end
-      if my > WorldY then
-        my = WorldY
-      end
-      if my < WorldX then
-        my = WorldX 
-      end
-      if getBackgroundColor(map,dim,mx,my,animationEnabled) == lbC then
-        if i == sx then
-          paintutils.drawLine(i - lbX, j, i, j, lbC)
-          lbX = 0
-        else
-          lbX = lbX + 1      
+  if graphicData.useAnimations then
+    changeAnimation = not changeAnimation
+  else
+    changeAnimation = false
+  end
+
+  if graphicData.graphicsType == "Fast" then -- Fast graphics
+    local newJ = 2
+    term.setCursorPos(1, 1)
+
+    for j = 1, sy do 
+      for i = 1, sx do 
+        local mx = i + ox
+        local my = j + oy
+        
+        if mx > WorldY then mx = WorldY end
+        if mx < WorldX then mx = WorldX end
+        if my > WorldY then my = WorldY end
+        if my < WorldX then my = WorldX end
+        
+        local lbBC = getBackgroundColor(map,dim,mx,my,changeAnimation)
+
+        if j == newJ then
+          newJ = newJ + 1
+          term.setCursorPos(1, j)
         end
-      else
-        paintutils.drawLine(i - lbX, j, i - 1, j, lbC)
-        lbC = getBackgroundColor(map,dim,mx,my,animationEnabled)
-        lbX = 1
+
+        term.setBackgroundColor(lbBC)
+        term.write(" ")
+
+        --[[
+        if getBackgroundColor(map,dim,mx,my,changeAnimation) == lbC then
+          if i == sx then
+            paintutils.drawLine(i - lbX, j, i, j, lbC)
+            lbX = 0
+          else
+            lbX = lbX + 1      
+          end
+        else
+          paintutils.drawLine(i - lbX, j, i - 1, j, lbC)
+          lbC = getBackgroundColor(map,dim,mx,my,changeAnimation)
+          lbX = 1
+        end
+        --]]
       end
     end
-  end
-  ]]--
 
-  -- Fancy graphics; fast graphics will be fgS only for blocks
-  for j = 1, sy do 
-    for i = 1, sx do 
-      local mx = i + ox
-      local my = j + oy
+  elseif graphicData.graphicsType == "Fancy" then -- Fancy graphics
+    local newJ = 2
+    term.setCursorPos(1, 1)
 
-      if mx > WorldY then
-        mx = WorldY
-      end
-      if mx < WorldX then
-        mx = WorldX 
-      end
-      if my > WorldY then
-        my = WorldY
-      end
-      if my < WorldX then
-        my = WorldX 
-      end
+    for j = 1, sy do 
+      for i = 1, sx do 
+        local mx = i + ox
+        local my = j + oy
 
-      local lbTC, lbS = getTextColor(map,dim,mx,my,animationEnabled)
-      if lbTC ~= lbT then
-        lbT = lbTC
-        term.setTextColor(lbT)
+        if mx > WorldY then mx = WorldY end
+        if mx < WorldX then mx = WorldX end
+        if my > WorldY then my = WorldY end
+        if my < WorldX then my = WorldX end
+
+        local lbTC, lbS = getTextColor(map,dim,mx,my,changeAnimation)
+        local lbBC = getBackgroundColor(map,dim,mx,my,changeAnimation)
+
+        if j == newJ then
+          newJ = newJ + 1
+          term.setCursorPos(1, j)
+        end
+
+        if lbTC ~= lbT then
+          lbT = lbTC
+
+          --if drawToBuffer then
+          --  current.screen[j][i].TColor = lbT
+          --else
+            term.setTextColor(lbT)
+          --end
+        end
+        --if drawToBuffer then
+        --  current.screen[j][i].BColor = lbBC
+        --  current.screen[j][i].Char = lbS
+        --else
+          term.setBackgroundColor(lbBC)
+          term.write(lbS)
+        --end
       end
-      term.setBackgroundColor(getBackgroundColor(map,dim,mx,my,animationEnabled))
-      term.setCursorPos(i, j)
-      term.write(lbS)
     end
   end
 
