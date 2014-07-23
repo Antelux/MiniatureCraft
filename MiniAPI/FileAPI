@@ -201,9 +201,12 @@ local function saveServerList()
 end
 
 local function loadServerList()
-  local serverListRaw = fs.open(getMainDirectory().. "/servers.data", "r")
-  local serverListed = textutils.unserialize(serverListRaw.readAll())
-  serverListRaw.close()
+  local serverListRaw, serverListed
+  if fs.exists(getMainDirectory().. "/servers.data") then
+    serverListRaw = fs.open(getMainDirectory().. "/servers.data", "r")
+    serverListed = textutils.unserialize(serverListRaw.readAll())
+    serverListRaw.close()
+  end
   serverList = serverListed or {}
 end
 
