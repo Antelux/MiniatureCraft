@@ -1,0 +1,390 @@
+local ScreenWidth, ScreenHeight = Screen.getSize()
+local Assets = File.loadAssets()
+local menuInterfaces = {}
+local selected, altSelected, switch = 1, 1, false
+local mainFolder = File.getMainDirectory()
+
+--[[
+  Conversion of Menu API to Interface API
+
+  Interace.newInterface(interfaceName, {
+    gui = {{shapeType, isBordered, color, x, y, width, height}},
+    text = {{string, backgroundColor, foregroundColor, x, y}},
+    button = {{string, backgroundColor, foregroundColor, x, y, functionOnClick}},
+    input = {{string, backgroundColor, foregroundColor, x, y, functionOnReturn}}
+  })
+
+  Use the Computercraft Graphics Library for the gui table (shapeType)
+--]]
+
+_G.Menu = {}
+
+local function shortenString(string, n)
+  if type(string) ~= "string" then return end
+  if string.len(string) <= n then return string end
+  
+  local nString = ""
+  for i = 1, n - 2 do nString = nString..string.char(string:byte(i)) end
+  return nString.. ".."
+end
+
+local function splitString(str, sep)
+  local sep, result = sep or "%s", {}
+  for output in string.gmatch(str, "([^"..sep.."]+)") do result[#result + 1] = output end
+  return result
+end
+
+local function Write(x, y, string) Screen.setCursorPos(x, y); Screen.write(string) end
+local function drawMenuBox(x, y, width, height, title, backgroundColor, borderColor, titleColor)
+  local backgroundColor = backgroundColor or colors.blue
+  local borderColor = borderColor or colors.white
+  local titleColor = titleColor or colors.yellow
+
+  for i = 1, height - 2 do paintutils.drawLine(x + 1, y + i, x + width - 2, y + i, backgroundColor) end
+
+  Screen.setTextColor(borderColor)
+  Write(x, y, "+"); Write((x - 1) + width, y, "+")
+  Write(x, (y - 1) + height, "+"); Write((x - 1) + width, (y - 1) + height, "+")
+
+  for i = 1, height - 2 do Write(x, y + i, "|"); Write((x - 1) + width, y + i, "|") end
+  for i = 1, width - 2 do Write(x + i, y, "-"); Write(x + i, (y - 1) + height, "-") end
+  if title then Screen.setTextColor(titleColor); Write(x + 2, y, title) end
+end
+
+local function menuList(x, y, width, height, title, table, selection)
+  drawMenuBox(x, y, width, height, title)
+
+  local returnValue = false
+  for i = 1 + (selection - 1), height - 2  + (selection - 1) do
+    if table[i] then
+      Screen.setBackgroundColor(colors.blue)
+      Screen.setTextColor(colors.lightGray)
+      Screen.setCursorPos(x + 2, y + (i - selection + 1))
+
+      if i == selection then print("[" ..shortenString(Assets[table[i].ID].name, 7).. "]"); returnValue = i
+      else print(shortenString(Assets[table[i].ID].name, 7)) end
+      
+      Write(x + 11, y + (i - selection + 1), "x" ..table[i].Amount)
+      Screen.setCursorPos(x + 15, y + (i - selection + 1))
+      if Assets[table[i].ID].type == "block" or Assets[table[i].ID].type == "blocktile" or Assets[table[i].ID].type == "tile" or Assets[table[i].ID].type == "liquid" then
+        Screen.setBackgroundColor(Assets[table[i].ID].texture[1] or colors.blue)
+        Screen.setTextColor(Assets[table[i].ID].texture[2] or colors.white)
+        Screen.write(Assets[table[i].ID].texture[3] or "?")
+      else
+        Screen.setTextColor(Assets[table[i].ID].texture[1])
+        Screen.write(Assets[table[i].ID].texture[2])
+      end
+    else break end
+  end
+
+  return returnValue
+end
+
+local function translateKey(key, value, maxValue, manual)
+  if not manual then
+    if key == 17 or key == 200 then value = value - 1 end -- Up Key
+    if key == 31 or key == 208 then value = value + 1 end -- Down Key
+  else value = value + manual end
+  if maxValue and value < 1 then value = maxValue end
+  if maxValue and value > maxValue then value = 1 end
+  return value
+end
+
+function Menu.newInterface(interfaceName, newInterface)
+  if type(interfaceName) ~= "string" or type(newInterface) ~= "function" then return end; menuInterfaces[interfaceName] = newInterface
+end
+
+function Menu.getInterface(interfaceName)
+  if type(interfaceName) ~= "string" then return end; return menuInterfaces[interfaceName] or false
+end
+
+local function openCraftingInterface(eventData, currentPlayer)
+  local interactionCoords = {Player.getFacingCoords(currentPlayer)}
+  local Block = Level.getData(Player.getDimension(currentPlayer), interactionCoords[1], interactionCoords[2]).Block
+  local craftingTables = Crafting.getCraftingTables()
+  local tableID = Crafting.isCraftingTable(Block.ID)
+  local x, y, width, height = craftingTables[tableID].Size[1], craftingTables[tableID].Size[2], craftingTables[tableID].Size[3], craftingTables[tableID].Size[4]
+
+  if pocket then width = width - 6 end
+  drawMenuBox(x, y, width, height, craftingTables[tableID].Name)
+  drawMenuBox(width + 3, y, width, (height / 2) - 4, "HAVE")
+  drawMenuBox(width + 3, (y + height / 2) - 3, width, (height / 2) + 3, "REQUIRED")
+
+  if eventData[1] == "key" then 
+    selected = translateKey(eventData[2], selected, #craftingTables[tableID].Recipes)
+    if eventData[2] == 16 or eventData[2] == 18 then selected = 1; return true -- Q, E
+    elseif eventData[2] == 28 then -- Enter 
+      if Player.getMode(currentPlayer) == 0 then
+        for i = 1, #craftingTables[tableID].Recipes[selected].Input / 2 do
+          local _, amountHave = Player.checkInventory(currentPlayer, craftingTables[tableID].Recipes[selected].Input[(i * 2) - 1]) 
+          if not amountHave or amountHave < craftingTables[tableID].Recipes[selected].Input[i * 2] then return end
+        end
+
+        for i = 1, #craftingTables[tableID].Recipes[selected].Input / 2 do
+          local giveID = craftingTables[tableID].Recipes[selected].Input[(i * 2) - 1]
+          local giveAmount = craftingTables[tableID].Recipes[selected].Input[i * 2]
+          if giveID and giveAmount then Player.removeItem(currentPlayer, giveID, giveAmount) end
+        end
+        Player.giveItem(currentPlayer, craftingTables[tableID].Recipes[selected].Output[1], craftingTables[tableID].Recipes[selected].Output[2])
+      else Player.giveItem(currentPlayer, craftingTables[tableID].Recipes[selected].Output[1], craftingTables[tableID].Recipes[selected].Output[2]) end
+    end
+  end
+
+  Screen.setTextColor(colors.lightGray)
+  for i = 1 + (selected - 1), height - 2 + (selected - 1) do
+    Screen.setCursorPos(x + 1, y + (i - selected) + 1)
+    if craftingTables[tableID].Recipes[i] then 
+      local assetName = Level.convertID(craftingTables[tableID].Recipes[i].Output[1])
+      if type(assetName) ~= "string" then return end
+      if i == selected then Screen.write("[" ..shortenString(assetName, width - 4).. "]") else Screen.write(shortenString(assetName, width - 4)) end
+    else
+      if i == selected then Screen.write("[ERROR]") else Screen.write("ERROR") end
+    end
+  end
+
+  if not craftingTables[tableID].Recipes[selected].Input then return end
+  for i = 1, #craftingTables[tableID].Recipes[selected].Input / 2 do
+    if (Player.getMode(currentPlayer) == 0 and Player.checkInventory(currentPlayer, craftingTables[tableID].Recipes[selected].Input[(i * 2) - 1])) or Player.getMode(currentPlayer) == 1 then Screen.setTextColor(colors.lightGray) else Screen.setTextColor(colors.gray) end
+    Write(width * 2 - 1, y + 4 + i, "x" ..craftingTables[tableID].Recipes[selected].Input[i * 2])
+    Write(width + 4, y + 4 + i, shortenString(Level.convertID(craftingTables[tableID].Recipes[selected].Input[(i * 2) - 1]) or "Unknown", width - 4))
+  end
+
+  local _, amountHave = Player.checkInventory(currentPlayer, craftingTables[tableID].Recipes[selected].Output[1]); amountHave = amountHave or 0
+  if amountHave ~= 0 then Screen.setTextColor(colors.lightGray) else Screen.setTextColor(colors.gray) end
+  Screen.setCursorPos(width + 4, y + 1)
+  Screen.write(shortenString(Level.convertID(craftingTables[tableID].Recipes[selected].Output[1]), width - 6))
+  Screen.setCursorPos(width * 2 - 1, y + 1)
+  Screen.write("x" ..amountHave)
+end
+
+local function openInventoryInterface(eventData, playerName)
+  local playerInventory = Player.getInventory(playerName)
+  menuList(2, 4, 18, 14, "INVENTORY", playerInventory, selected)
+  if eventData[1] == "key" then 
+    selected = translateKey(eventData[2], selected, #playerInventory)
+    local inventorySlot = menuList(2, 4, 18, 14, "INVENTORY", playerInventory, selected) 
+    if eventData[2] == 16 or eventData[2] == 28 or eventData[2] == 18 then -- Q, Enter, E
+      Player.equipItem(playerName, inventorySlot); selected = 1; return true
+    end
+  end
+end
+
+local function openChestInterface(eventData, playerName)
+  local interactionCoordsX, interactionCoordsY = Player.getFacingCoords(playerName)
+  local Chest = Level.getData(Player.getDimension(playerName), interactionCoordsX, interactionCoordsY).Block or false
+  if not Chest or not Assets[Chest.ID].inventory then return end; Chest.storage = Chest.storage or {}
+  local playerInventory = Player.getInventory(playerName)
+
+  if eventData[1] == "key" then 
+    if switch then altSelected = translateKey(eventData[2], altSelected, #Chest.storage) else selected = translateKey(eventData[2], selected, #playerInventory) end
+    if eventData[2] == 16 or eventData[2] == 18 then selected, altSelected, switch = 1, 1, false; return true end -- Q, E
+    if eventData[2] == 30 or eventData[2] == 203 then switch = false end -- left key
+    if eventData[2] == 32 or eventData[2] == 205 then switch = true end -- Right key
+    if eventData[2] == 28 then -- Enter 
+      if switch then
+        playerInventory[#playerInventory + 1] = Chest.storage[altSelected]
+        table.remove(Chest.storage, altSelected)
+        Player.setInventory(playerName, playerInventory)
+      else
+        if #Chest.storage >= Assets[Chest.ID].inventory then return end
+        Chest.storage[#Chest.storage + 1] = playerInventory[selected]
+        table.remove(playerInventory, selected)
+        Player.setInventory(playerName, playerInventory)
+      end
+    end
+  end
+  menuList(2, 4, 18, 14, "INVENTORY", playerInventory, selected)
+  menuList(23, 4, 18, 14, "CHEST", Chest.storage, altSelected)
+
+  Level.setData(Player.getDimension(playerName), interactionCoordsX, interactionCoordsY, {Block = {ID = Chest.ID, storage = Chest.storage}})
+end
+
+local sizeOptions = {
+  {"SMALL: 64x64", 64},
+  {"MEDIUM: 96x96", 96},
+  {"LARGE: 128x128", 128}
+}
+
+local levelSelection, sizeSelection = 1, 1
+local createNewWorld = false
+local worldName = "World"
+
+local function levelMenu(eventData)
+  local fileList = fs.list(mainFolder.. "/Saves")
+
+  if eventData[1] == "key" then
+    if createNewWorld then sizeSelection = translateKey(eventData[2], sizeSelection, 3)
+    else levelSelection = translateKey(eventData[2], levelSelection, #fileList)
+    if eventData[2] == 28 then File.loadWorld(fileList[levelSelection]); return "singlePlayer" end end
+
+  elseif eventData[1] == "mouse_scroll" then 
+    if createNewWorld then sizeSelection = translateKey(_, sizeSelection, 3, eventData[2])
+    else levelSelection = translateKey(_, levelSelection, #fileList, eventData[2]) end
+
+  elseif eventData[1] == "mouse_click" then
+    if eventData[3] >= ((ScreenWidth - 12) / 2) and eventData[3] <= ((ScreenWidth - 12) / 2) + 3 and eventData[4] == ScreenHeight - 4 and not createNewWorld then createNewWorld = true end
+    if eventData[3] >= ((ScreenWidth - 12) / 2) - 1 and eventData[3] <= ((ScreenWidth - 12) / 2) + 3 and eventData[4] == 13 and createNewWorld then createNewWorld = false end
+    if eventData[3] >= ((ScreenWidth - 14) / 2) - 1 and eventData[3] <= ((ScreenWidth - 14) / 2) + 15 and eventData[4] == 12 and createNewWorld then 
+      paintutils.drawLine(((ScreenWidth - 12) / 2) - 1, 12, ((ScreenWidth - 12) / 2) + 14, 12, colors.gray)
+      Screen.setTextColor(colors.white); Screen.setCursorPos(((ScreenWidth - 14) / 2), 12); worldName = read()
+    end
+    if eventData[3] >= ((ScreenWidth - 12) / 2) + 5 and eventData[3] <= ((ScreenWidth - 12) / 2) + 12 and eventData[4] == 13 and createNewWorld then
+      local currentPlayer = Player.getCurrentPlayer()
+      Player.newPlayer(currentPlayer)
+      Player.giveItem(currentPlayer, 150, 1) -- Punch Item
+      Player.giveItem(currentPlayer, 13, 1) -- Crafting Table
+      Player.giveItem(currentPlayer, 210, 3) -- Apple
+      Level.setWorld(Level.newWorld(sizeOptions[sizeSelection][2], sizeOptions[sizeSelection][2]))
+      File.saveWorld(worldName); createNewWorld = false
+    end
+  end
+
+  local offset = 0; if pocket then offset = 1 end
+  if createNewWorld then
+    Screen.setBackgroundColor(colors.black)
+    Screen.setTextColor(colors.white); Write(((ScreenWidth - 12) / 2) - 1, 7, "WORLD GENERATION"); Screen.setTextColor(colors.lightGray)
+    for y = 1, #sizeOptions do 
+      if y == sizeSelection then Write(((ScreenWidth - 12) / 2) - 1 + offset, 7 + y, "[" ..sizeOptions[y][1].. "]")
+      else Write(((ScreenWidth - 12) / 2) + offset, 7 + y, sizeOptions[y][1]) end
+    end
+    Screen.setTextColor(colors.lightBlue); Write(((ScreenWidth - 12) / 2), 13, "BACK"); Write(((ScreenWidth - 12) / 2) + 6, 13, "GENERATE");
+    paintutils.drawLine(((ScreenWidth - 12) / 2) - 1, 12, ((ScreenWidth - 12) / 2) + 14, 12, colors.gray)
+    Screen.setTextColor(colors.white); Write(((ScreenWidth - 14) / 2), 12, worldName)
+  else
+    Screen.setTextColor(colors.white)
+    Write(((ScreenWidth - 12) / 2) + offset, 7, "SELECT WORLD")
+    Write(((ScreenWidth - 12) / 2) + 1 + offset, ScreenHeight - 4, "NEW")
+    Write(((ScreenWidth - 12) / 2) + 7 + offset, ScreenHeight - 4, "PLAY")
+
+    for i = 1 + (levelSelection - 1), ScreenHeight - 10 + (levelSelection - 1) do
+      if not fileList[i] then return end
+      if levelSelection == i then Screen.setTextColor(colors.blue); Write(((ScreenWidth - 12) / 2) + offset, i + 7 - (levelSelection - 1), "[" ..fileList[i].. "]")
+      else Screen.setTextColor(colors.lightGray); Write(((ScreenWidth - 12) / 2) + offset + (math.floor(#fileList[i] / 4) - 1), i + 7 - (levelSelection - 1), "[" ..fileList[i].. "]") end
+    end
+  end
+end
+
+local function serverMenu(eventData) end
+local function timeoutMenu(eventData) end
+local function modsMenu(eventData) end
+
+local optionOptions = {{"NAME:"}, {"COLOR:"}}
+local function optionsMenu(eventData) 
+  if eventData[1] == "mouse_click" then
+    if eventData[3] >= ((ScreenWidth - 12) / 2) - 4 and eventData[3] <= ((ScreenWidth - 12) / 2) + 12 and eventData[4] == 9 then
+      File.setCurrentColor(2 ^ (eventData[3] - math.floor((ScreenWidth - 12) / 2) + 3))
+    elseif eventData[3] >= ((ScreenWidth - 12) / 2) - 5 and eventData[3] <= ((ScreenWidth - 12) / 2) + 11 and eventData[4] == 8 then
+      paintutils.drawLine(((ScreenWidth - 12) / 2) - 4, 8, ((ScreenWidth - 12) / 2) + 11, 8, colors.gray)
+      Screen.setTextColor(colors.white); Screen.setCursorPos(((ScreenWidth - 12) / 2) - 4, 8)
+      File.setCurrentPlayer(read())
+    end      
+  end
+    
+  local playerName = File.getCurrentPlayer()
+  local playerColor = File.getCurrentColor()
+
+  Screen.setBackgroundColor(colors.black)
+  Screen.setTextColor(colors.lightBlue)
+  Write(((ScreenWidth - 12) / 2) - 10, 8, "NAME:")
+  Write(((ScreenWidth - 12) / 2) - 10, 9, "COLOR:")
+  paintutils.drawLine(((ScreenWidth - 12) / 2) - 4, 8, ((ScreenWidth - 12) / 2) + 11, 8, colors.gray)
+  Screen.setTextColor(colors.white)
+  Write(((ScreenWidth - 12) / 2) - 4, 8, playerName)
+
+  for i = 1, 16 do
+    Screen.setBackgroundColor(2 ^ (i - 1))
+    if playerColor == 1 then Screen.setTextColor(colors.black) else Screen.setTextColor(colors.white) end
+    if 2 ^ (i - 1) == playerColor then Write(((ScreenWidth - 12) / 2) - 4 + i, 9, "X")
+    else Write(((ScreenWidth - 12) / 2) - 4 + i, 9, " ") end
+  end
+end
+
+local menuChoices = {
+  {"SINGLEPLAYER", 8, levelMenu},
+  {"MULTIPLAYER", 21, serverMenu},
+  {"MODS", 33, modsMenu},
+  {"OPTIONS", 38, optionsMenu}
+}
+
+if pocket then
+  menuChoices = {
+    {"SI", 8, levelMenu},
+    {"MU", 11, serverMenu},
+    {"MO", 14, modsMenu},
+    {"OPT", 17, optionsMenu}
+  }
+end
+
+local pauseChoices = {"RESUME", "SAVE & QUIT"}
+local function pauseMenu(eventData)
+  if eventData[1] == "key" then
+    selected = translateKey(eventData[2], selected, #pauseChoices)
+    if eventData[2] == 28 then if selected == 1 then return true else selected = 1; return "quit" end
+    elseif eventData[2] == 14 then selected = 1; return true end
+  end
+
+  local offset = 0; if pocket then offset = 2 end
+  drawMenuBox(math.floor(ScreenWidth / 4), math.floor(ScreenHeight / 2) - 1, math.ceil(ScreenWidth / 2) + offset, 4, "PAUSED")
+  Screen.setTextColor(colors.lightGray)
+  for i = 1, #pauseChoices do
+    if i == selected then Write(math.floor(ScreenWidth / 4) + 1, math.floor(ScreenHeight / 2) + i - 1, "[" ..pauseChoices[i].. "]")
+    else Write(math.floor(ScreenWidth / 4) + 2, math.floor(ScreenHeight / 2) + i - 1, pauseChoices[i]) end
+  end
+end
+
+local function openStartInterface(eventData) 
+  if eventData[1] == "mouse_click" and eventData[4] == 5 then -- Tab Selection
+    for i = 1, #menuChoices do if eventData[3] >= menuChoices[i][2] and eventData[3] < menuChoices[i][2] + #menuChoices[i][1] then selected = i end end
+  end
+
+  if pocket then drawMenuBox(7, 4, ScreenWidth - 12, ScreenHeight - 6, "MC " ..File.getVersion(), colors.black, colors.blue); Screen.setCursorPos(8, 5)
+  else drawMenuBox(7, 4, ScreenWidth - 12, ScreenHeight - 6, "MINIATURECRAFT " ..File.getVersion(), colors.black, colors.blue); Screen.setCursorPos(8, 5) end
+  for i = 1, #menuChoices do
+    Screen.setTextColor(colors.gray); if selected == i then Screen.setTextColor(colors.cyan) end
+    Screen.write(menuChoices[i][1]); Screen.setTextColor(colors.blue); Screen.write("|")
+  end
+  Screen.setCursorPos(8, 6); Screen.write(string.rep("-", ScreenWidth - 14))
+  return menuChoices[selected][3](eventData)
+end
+
+local function changeBlock(playerName, newID)
+  local interactionCoordsX, interactionCoordsY = Player.getFacingCoords(playerName)
+  local doorBlock = Level.getData(Player.getDimension(playerName), interactionCoordsX, interactionCoordsY).Block or false
+  if not doorBlock then return end; Level.setData(Player.getDimension(playerName), interactionCoordsX, interactionCoordsY, {Block = {ID = newID}})
+end
+
+local tString, history, scroll = "",  {}, 0
+local function chatInterface(eventData, playerName)
+  local chatHistory = Chat.getMessages()
+    local scrollOffset = (#chatHistory - 6); if scrollOffset < 0 then scrollOffset = 0 end
+
+  Screen.setCursorBlink(true)
+  if eventData[1] == "char" then if #tString < ScreenWidth then tString = tString.. eventData[2]; end 
+  elseif eventData[1] == "key" then
+    if eventData[2] == 14 then tString = string.sub(tString, 1, #tString - 1);  
+    elseif eventData[2] == 28 then if tString ~= "" then Chat.sendMessage(tString, playerName); tString = "" end
+    elseif eventData[2] == 59 then Screen.setCursorBlink(false); return true end
+  elseif eventData[1] == "mouse_scroll" then
+    scroll = scroll + eventData[2]
+    --if scroll - scrollOffset < #chatHistory then scroll = 0 end--; if scroll > #chatHistory + scrollOffset end
+  end
+
+  Screen.setTextColor(colors.white)
+  for i = 1, 6 do paintutils.drawLine(1, ScreenHeight + i - 7, ScreenWidth / 2, ScreenHeight + i - 7, colors.lightGray) end
+  for i = 1, 6 do if chatHistory[i + scroll + scrollOffset] then Write(1, ScreenHeight + i - 7, chatHistory[i + scroll + scrollOffset][1]) end end
+
+  paintutils.drawLine(1, ScreenHeight, ScreenWidth / 2, ScreenHeight, colors.gray)
+  Screen.setCursorPos(1, ScreenHeight); Screen.setTextColor(colors.yellow)
+  Screen.write(">"); Screen.setTextColor(colors.white); 
+  if #tString <= (ScreenWidth / 2) - 3 then Screen.write(tString) 
+  else Screen.write(string.sub(tString, 1 + (#tString - ((ScreenWidth / 2) - 3)))) end
+end
+
+Menu.newInterface("Crafting", openCraftingInterface)
+Menu.newInterface("Inventory", openInventoryInterface)
+Menu.newInterface("Chest", openChestInterface)
+Menu.newInterface("StartMenu", openStartInterface)
+Menu.newInterface("dooropen", function(_, playerName) changeBlock(playerName, 34); return true end)
+Menu.newInterface("doorclosed", function(_, playerName) changeBlock(playerName, 35); return true end)
+Menu.newInterface("Chat", chatInterface)
+Menu.newInterface("PauseMenu", pauseMenu)

@@ -1,0 +1,112 @@
+local nativeTerm = term.native()
+local sx, sy = nativeTerm.getSize()
+local decToHex = {[1] = "0", [2] = "1", [4] = "2", [8] = "3", [16] = "4", [32] = "5", [64] = "6", [128] = "7", [256] = "8", [512] = "9", [1024] = "self.act", [2048] = "b", [4096] = "c", [8192] = "d", [16384] = "e", [32768] = "f"}
+local colorList, oldColorList = {}, {}
+
+local function getColorOf(hex) return math.pow(2, tonumber(hex, 16)) end
+local function colorIsValid(color, isColor)
+    if isColor then if color < 1 or color > 32768 then error("Colour out of range", 2) end
+    else if color ~= 1 or color ~= 32768 then error("Colour out of range", 2) end end return true
+end
+
+local function checkColor(x, y, col)
+    for k, v in pairs(colorList) do
+        if k == col then colorList[k][#colorList[k] + 1] = {x, y}; return colorList end
+    end
+    colorList[col] = {{x, y}}; return colorList
+end
+
+_G.Buffer = {}
+function Buffer.createBuffer(x, y, width, height, termIsColor)
+    local termObject = {
+        CursorX = 1, CursorY = 1,
+        OffsetX = x or 1, OffsetY = y or 1,
+        Width = width or sx, Height = height or sy,
+        TColor = colors.white, BColor = colors.black,
+        CursorBlink = false,
+        Active = true,
+        TermIsColor = termIsColor or nativeTerm.isColor(),
+        textScreen = {}, textColor = {}, backColor = {}
+    }
+
+    for i = 1, termObject.Height do 
+        termObject.textScreen[i] = string.rep(" ", termObject.Width)
+        termObject.textColor[i] = string.rep(decToHex[termObject.TColor], termObject.Width) 
+        termObject.backColor[i] = string.rep(decToHex[termObject.BColor], termObject.Width) 
+    end
+
+    local terminalFunctions = {
+        isColor = function(termObject) return termObject.TermIsColor end,
+        write = function(termObject, ...)
+            local tString = ... or ""
+            if termObject.CursorX < 1 or termObject.CursorY > termObject.Width or termObject.CursorY < 1 or termObject.CursorY > termObject.Height or #tString == 0 then return end
+            termObject.textScreen[termObject.CursorY] = string.sub(termObject.textScreen[termObject.CursorY], 1, termObject.CursorX - 1) ..tString.. string.sub(termObject.textScreen[termObject.CursorY], termObject.CursorX + #tString)
+            termObject.textColor[termObject.CursorY] = string.sub(termObject.textColor[termObject.CursorY], 1, termObject.CursorX - 1) ..string.rep(decToHex[termObject.TColor], #tString).. string.sub(termObject.textColor[termObject.CursorY], termObject.CursorX + #tString)
+            termObject.backColor[termObject.CursorY] = string.sub(termObject.backColor[termObject.CursorY], 1, termObject.CursorX - 1) ..string.rep(decToHex[termObject.BColor], #tString).. string.sub(termObject.backColor[termObject.CursorY], termObject.CursorX + #tString)
+            termObject.CursorX = termObject.CursorX + #tString
+        end,
+         
+        setCursorPos = function(termObject, x, y) termObject.CursorX, termObject.CursorY = math.floor(x), math.floor(y) end,  
+        getCursorPos = function(termObject) return termObject.CursorX, termObject.CursorY end,
+        scroll = function(termObject, scrollAmount) end,
+         
+        clear = function(termObject)
+            for i = 1, termObject.Height do 
+                termObject.textScreen[i] = string.rep(" ", termObject.Width) 
+                termObject.textColor[i] = string.rep(decToHex[termObject.TColor], termObject.Width) 
+                termObject.backColor[i] = string.rep(decToHex[termObject.BColor], termObject.Width) 
+            end
+        end,
+        
+        clearLine = function(termObject) end,
+        setCursorBlink = function(termObject, cBool) if type(cBool) == "boolean" then termObject.CursorBlink = cBool end end,
+        getSize = function(termObject) return termObject.Width, termObject.Height end,
+        setTextColor = function(termObject, color) if colorIsValid(color, termObject.TermIsColor) then termObject.TColor = color end end,
+        setBackgroundColor = function(termObject, color) if colorIsValid(color, termObject.TermIsColor) then termObject.BColor = color end end,
+
+        drawScreen = function(termObject, x, y, w, h)
+            oldColorList = colorList; colorList = {}
+            if termObject.Active then 
+                nativeTerm.setBackgroundColor(colors.black)
+                nativeTerm.clear()
+                
+                if termObject.CursorBlink then nativeTerm.setCursorBlink(false) end
+                local currentTColor = termObject.TColor
+
+                for y = 1, termObject.Height do
+                    for x = 1, termObject.Width do
+                        checkColor(x, y, getColorOf(string.sub(termObject.backColor[y], x, x)) or termObject.BColor)
+                    end
+                end
+                for k, v in pairs(colorList) do
+                    nativeTerm.setBackgroundColor(k)
+                    for j = 1, #colorList[k] do
+                        local colX, colY = colorList[k][j][1], colorList[k][j][2]
+                        local textColor = getColorOf(string.sub(termObject.textColor[colY], colX, colX)) or termObject.TColor
+                        if textColor ~= currentTColor then currentTColor = textColor; nativeTerm.setTextColor(currentTColor) end
+                        nativeTerm.setCursorPos(colX + (termObject.OffsetX - 1), colY + (termObject.OffsetY - 1))
+                        nativeTerm.write(string.sub(termObject.textScreen[colY], colX, colX) or " ")
+                    end
+                end
+
+                nativeTerm.setBackgroundColor(termObject.BColor)
+                nativeTerm.setTextColor(termObject.TColor)
+                if termObject.CursorBlink then 
+                    nativeTerm.setCursorPos(termObject.CursorX, termObject.CursorY)
+                    nativeTerm.setCursorBlink(true) 
+                end
+            end
+        end
+    }
+
+    terminalFunctions.setBackgroundColour = terminalFunctions.setBackgroundColor
+    terminalFunctions.setTextColour = terminalFunctions.setTextColor
+    terminalFunctions.isColour = terminalFunctions.isColor
+    local function wrapTable(f, o) return function(...) return f(o, ...) end end
+    for k, v in pairs(terminalFunctions) do
+        if type(v) == "function" then terminalFunctions[k] = wrapTable(v, termObject)
+        else terminalFunctions[k] = v end
+    end
+    setmetatable(termObject, {__index = terminalFunctions})
+    return termObject
+end

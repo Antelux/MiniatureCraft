@@ -1,0 +1,190 @@
+local MainFolder = shell.getRunningProgram():sub(1, #shell.getRunningProgram() - #fs.getName(shell.getRunningProgram()))
+local loadedMods, interactionBlocks, serverList = {}, {}, {}
+local Assets = File.getAssets()
+local parentMod 
+local levelName = ""
+local ScreenWidth, ScreenHeight = Screen.getSize()
+
+local optionData = {
+  playerName = "Player",
+  playerColor = colors.red --,
+  -- useAnimations = true,
+}
+
+local fileDirectory = {"/API", "/Mods", "/Saves", "/Config"}
+for i = 1, #fileDirectory do if not fs.exists(MainFolder.. "" ..fileDirectory[i]) then fs.makeDir(MainFolder.. "" ..fileDirectory[i]) end end
+
+local function reloadOptions(wipe)
+  if not fs.exists(MainFolder.. "/options.data") or wipe then local options = fs.open(MainFolder.. "/options.data", "w"); options.write(textutils.serialize(optionData)); options.close()
+  else local options = fs.open(MainFolder.. "/options.data", "r"); optionData = textutils.unserialize(options.readAll()); options.close() end
+end
+reloadOptions()
+
+function File.setCurrentPlayer(newPlayerName) optionData.playerName = newPlayerName; reloadOptions(true) end
+function File.getCurrentPlayer() return optionData.playerName end
+function File.setCurrentColor(newColor) optionData.playerColor = newColor; reloadOptions(true) end
+function File.getCurrentColor() return optionData.playerColor end
+function File.getCurrentWorldName() return levelName end
+function File.getVersion() return "2.0 Beta" end
+
+-- Merges two tables together, used for putting mod assets with the main ones.
+local function mergeTables(addon, original)
+  for k, v in pairs(addon) do original[k] = v end; return original
+end
+
+-- Run mod scripts in a sandboxed environment
+function File.runScript(script)
+  local loadedScript
+  if type(script) == "string" then loadedScript = function() dofile(script) end elseif type(script) ~= "function" then return end
+
+  local blockedFunctions = {fs = nil, shell = nil, window = nil, peripheral = nil, multishell = nil} --, Level.worldBase = nil}
+  local environment = mergeTables(blockedFunctions, _G)
+        
+  setfenv(loadedScript, environment)
+  local ok, error = pcall(function() loadedScript() end)
+  if not ok and err and err ~= "" then
+    local errorLog = fs.open(MainFolder.. "/log", "w")
+    errorLog.write(os.day().. ":" ..textutils.serialize(os.time()).. ":" ..err)
+  end
+end
+
+-- Returns the main directory of MiniatureCraft.
+function File.getMainDirectory() return MainFolder end
+
+function File.loadMods()
+  local foundMods = fs.list(File.getMainDirectory().. "/Mods/")
+  for _, file in ipairs(foundMods) do
+    parentMod = file
+    File.runScript(File.getMainDirectory().. "/Mods/" ..file) 
+  end
+end
+
+-- Loads the games assets, and mods aswell.
+function File.loadAssets()
+  -- Merges the mods assets with the games ones.
+  for i = 1, #loadedMods do
+    if loadedMods[i].Assets then Assets = mergeTables(loadedMods[i].Assets, Assets) end
+  end
+
+  return Assets
+end
+
+-- Returns the currently loaded mods.
+function File.getLoadedMods() return loadedMods end
+
+-- Adds a mod to the game. Requires a table of information.
+function File.addMod(modTable) 
+  loadedMods[#loadedMods + 1] = {
+    ParentMod = parentMod or "Unknown",
+    Name = modTable.name or "Unknown",
+    Author = modTable.author or "Unknown",
+    Info = modTable.info or "This mod lacks a description! ):", 
+    Assets = modTable.assets or false
+  }
+end
+ 
+-- See if chaning | or : makes a difference in size
+-- Save and load the storage table
+function File.saveWorld(worldName)
+  if type(worldName) ~= "string" then return end
+  local SavePath, currentWorld = File.getMainDirectory().. "/Saves/" ..worldName, Level.getWorld()
+  fs.delete(SavePath.. "/Dimension"); fs.delete(SavePath.. "/players.data"); fs.makeDir(SavePath.. "/Dimension")
+  local Players = fs.open(SavePath.. "/players.data", "w"); Players.write(textutils.serialize(Player.getPlayers())); Players.close()
+  local WorldData = fs.open(SavePath.. "/world.data", "w"); WorldData.write(textutils.serialize(currentWorld["size"])); WorldData.close()
+  for dimension in pairs(currentWorld) do
+    if dimension ~= "size" then
+      local World, fileString = fs.open(SavePath.. "/Dimension/" ..dimension, "w"), ""
+      for y = 1, currentWorld["size"][2] do
+        for x = 1, currentWorld["size"][1] do
+          local Tile = currentWorld[dimension][x][y].Tile; fileString = fileString.. "" .. Tile.ID
+          local Block = currentWorld[dimension][x][y].Block or false; if Block and Block.ID then fileString = fileString.. ":" ..Block.ID end
+          if x ~= currentWorld["size"][1] then fileString = fileString.. "|" end
+        end
+        World.writeLine(fileString)
+        fileString = ""
+        os.queueEvent("yield"); os.pullEvent("yield")
+      end
+      World.close()
+    end
+  end
+end
+
+local function splitWorldString(str)
+  local result = {}
+  for output in string.gmatch(str, "([^|]+)") do 
+    local sx, ex = string.find(output, ":")
+    local block, tile = false, tonumber(output)
+    if sx then block = string.sub(output, ex + 1); tile = string.sub(output, 1, ex - 1) end
+    result[#result + 1] = {Block = block, Tile = tile}
+  end
+  return result
+end
+
+function File.loadWorld(worldName)
+  if type(worldName) ~= "string" then return end
+  local SavePath, Length, Width = File.getMainDirectory().. "/Saves/" ..worldName
+  if not fs.exists(SavePath) then return end
+  local Players = fs.open(SavePath.. "/players.data", "r"); Player.setPlayers(textutils.unserialize(Players.readAll())); Players.close()
+  local WorldData = fs.open(SavePath.. "/world.data", "r"); local Size = textutils.unserialize(WorldData.readAll()); Length, Width = Size[1], Size[2]; WorldData.close()
+  local Dimensions = fs.list(SavePath.. "/Dimension/"); table.sort(Dimensions, function(a, b) return a > b end)
+  Level.worldBase(Length, Width, Dimensions[3], Dimensions[1])
+  for _, dimension in ipairs(Dimensions) do
+    local World = fs.open(SavePath.. "/Dimension/" ..dimension, "r")
+    local Line, y = World.readLine(), 1
+    while Line do
+      local Data = splitWorldString(Line, "|")
+      for x = 1, #Data do Level.setData(tonumber(dimension), x, y, {Block = {ID = Data[x].Block}, Tile = {ID = Data[x].Tile}}) end
+      Line = World.readLine(); y = y + 1
+    end
+    World.close()
+    os.queueEvent("yield"); os.pullEvent("yield")
+  end
+  local newWorld = Level.getWorld()
+  newWorld["size"] = {Length, Width}
+  Level.setWorld(newWorld); levelName = worldName
+  Player.setName(Player.getNames()[1], optionData.playerName)
+  Player.setColor(optionData.playerName, optionData.playerColor)
+  local px, py = Player.getCoordinates(optionData.playerName)
+  Level.setOffset(px - math.ceil(ScreenWidth / 2), py - math.ceil(ScreenHeight / 2))
+end
+
+local blockedFiles = {"mc", "Assets", "Mods", "API"}
+local function checkFile(filename)
+  local result = {}
+  for output in string.gmatch(filename, "([^/]+)") do result[#result + 1] = output end
+  for i = 1, #blockedFiles do if result[1] == blockedFiles[i] then return true end end
+end
+
+function File.writeToFile(filename, fileTable) 
+  if type(filename) ~= "string" or type(fileTable) ~= "table" then return end
+  local filename = MainFolder.. "/" ..filename
+  if not fs.exists(filename) then return end
+  if checkFile(filename) then return end
+  local file = fs.open(filename, "w")
+  for i = 1, #fileTable do
+    file.writeLine(fileTable[i])
+  end
+  file.close()
+end
+
+function File.readFromFile(filename) 
+  if type(filename) ~= "string" then return end
+  local filename = MainFolder.. "/" ..filename
+  if not fs.exists(filename) then return end
+  if checkFile(filename) then return end
+  local lineTable = {}
+  local file = fs.open(filename, "r")
+  local Line = file.readLine()
+  while Line do
+    lineTable[#lineTable + 1] = Line
+    Line = file.readLine()
+  end
+  file.close()
+  return lineTable
+end
+
+function File.exists(filename)
+  if type(filename) ~= "string" then return end
+  local filename = MainFolder.. "/" ..filename
+  if fs.exists(filename) then return true end
+end

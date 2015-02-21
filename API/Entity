@@ -1,0 +1,92 @@
+local Assets = File.getAssets()
+local entityData = {}
+
+_G.Entity = {}
+
+local function verifyEntity(entityID, numberTable, stringTable, boolTable, tableTable)
+  if type(entityID) ~= "number" then return end 
+  if not entityData[entityID] then return end
+  if type(numberTable) == "table" then for i = 1, #numberTable do if type(numberTable[i]) ~= "number" then return end end end
+  if type(stringTable) == "table" then for i = 1, #stringTable do if type(stringTable[i]) ~= "string" then return end end end
+  if type(boolTable) == "table" then for i = 1, #boolTable do if type(boolTable[i]) ~= "boolean" then return end end end
+  if type(tableTable) == "table" then for i = 1, #tableTable do if type(tableTable[i]) ~= "table" then return end end end
+  return true
+end
+
+function Entity.updateEntities()
+  for i = 1, #entityData do
+    if entityData[i] and entityData[i].health <= 0 then entityData[i] = nil end --table.remove{entityData, i} end
+  end
+end
+
+function Entity.getEntities() Entity.updateEntities(); return entityData end
+function Entity.setEntities(newEntityData) if type(newEntityData) == "table" then entityData = newEntityData; Entity.updateEntities() end end
+
+function Entity.spawnEntity(entityid, dimension, x, y, overrideTable)
+  if type(entityid) ~= "number" or type(dimension) ~= "number" or type(x) ~= "number" or type(y) ~= "number" then return end
+  local newEntity = #entityData + 1
+  entityData[newEntity] = {
+    currentDim = dimension,
+    coordinates = {x, y},
+    ID = entityid,
+    direction = math.random(4)
+  }
+
+  for k, v in pairs(Assets[entityid]) do entityData[newEntity][k] = v end
+  if overrideTable then for k, v in pairs(overrideTable) do entityData[newEntity][k] = v end end
+
+  Entity.updateEntities()
+end
+
+function Entity.removeEntity(entityid)
+  if not verifyEntity(entityid) then return end
+  for i = 1, #entityData do
+    if entityData[i] and entityData[i].ID == entityid then table.remove{entityData, i}; break end
+  end
+  Entity.updateEntities()
+end
+
+function Entity.setDirection(entityid, newDirection) if verifyEntity(entityid, {entityid, newDirection}) and (newDirection < 1 or newDirection > 4) then entityData[entityid].direction = newDirection end end
+function Entity.getDirection(entityid) if verifyEntity(entityid) then return entityData[entityid].direction end end
+function Entity.setHealth(entityid, healthAmount) if verifyEntity(entityid {healthAmount}) then entityData[entityid].Health = healthAmount end end
+function Entity.getHealth(entityid) if verifyEntity(entityid) then return entityData[entityid].health end end
+
+function Entity.setCoordinates(entityid, x, y)
+  if not verifyEntity(entityid, {x, y}) then return end
+
+  if type(x) == "string" then
+    if string.find(x, "add") then entityData[entityid].coordinates[1] = entityData[entityid].coordinates[1] + (tonumber(x:sub(4)) or 0) end
+    if string.find(x, "sub") then entityData[entityid].coordinates[1] = entityData[entityid].coordinates[1] - (tonumber(x:sub(4)) or 0) end
+  elseif type(x) == "number" then entityData[entityid].coordinates[1] = x end
+
+  if type(y) == "string" then
+    if string.find(y, "add") then entityData[entityid].coordinates[2] = entityData[entityid].coordinates[2] + (tonumber(y:sub(4)) or 0) end
+    if string.find(y, "sub") then entityData[entityid].coordinates[2] = entityData[entityid].coordinates[2] - (tonumber(y:sub(4)) or 0) end
+  elseif type(y) == "number" then entityData[entityid].coordinates[2] = y end
+end
+
+function Entity.getCoordinates(entityid) if verifyEntity(entityid) then return entityData[entityid].coordinates[1], entityData[entityid].coordinates[2] end end
+function Entity.setDimension(entityid, dimension) if verifyEntity(entityid, {dimension}) then entityData[entityid].currentDim = dimension end end
+function Entity.getDimension(entityid) if verifyEntity(entityid) then return entityData[entityid].currentDim end end
+function Entity.equipItem(entityid, itemid) if verifyEntity(entityid, {itemid}) and Assets[itemid] then entityData[entityid].heldItem = itemid end end
+function Entity.getHeldItem(entityid) if verifyEntity(entityid) then return entityData[entityid].heldItem end end
+
+function Entity.move(entityid, moveAmount, checkCollision)
+  if not verifyEntity(entityid, {moveAmount}, _, {checkCollision}) then return end
+  local currentDirection = entityData[entityid].direction
+  local newPositionX, newPositionY = entityData[entityid].coordinates[1], entityData[entityid].coordinates[2]
+  local width, height = Level.getSize()
+
+  if currentDirection == 1 then newPositionY = newPositionY - moveAmount
+  elseif currentDirection == 2 then newPositionX = newPositionX + moveAmount
+  elseif currentDirection == 3 then newPositionY = newPositionY + moveAmount
+  else newPositionX = newPositionX - moveAmount end
+
+  if checkCollision and Level.checkForCollision(entityData[entityid].currentDim, newPositionX, newPositionY, {51, 61}) then return end
+  if newPositionX < 1 or newPositionX > width or newPositionY < 1 or newPositionY > height then return end
+  entityData[entityid].coordinates = {newPositionX, newPositionY}
+end
+
+function Entity.attack(entityid, playerName)
+
+end

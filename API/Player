@@ -1,0 +1,269 @@
+_G.Player = {}
+
+local Assets = File.loadAssets()
+local currentPlayer = File.getCurrentPlayer()
+local playerData = {}
+
+local function verifyPlayer(playerName, numberTable, stringTable, boolTable, tableTable)
+  if type(playerName) ~= "string" then return false end 
+  if not playerData[playerName] then return false end
+  if type(numberTable) == "table" then for i = 1, #numberTable do if type(numberTable[i]) ~= "number" then return false end end end
+  if type(stringTable) == "table" then for i = 1, #stringTable do if type(stringTable[i]) ~= "string" then return false end end end
+  if type(boolTable) == "table" then for i = 1, #boolTable do if type(boolTable[i]) ~= "boolean" then return false end end end
+  if type(tableTable) == "table" then for i = 1, #tableTable do if type(tableTable[i]) ~= "table" then return false end end end
+  return true
+end
+
+function Player.newPlayer(playerName, overrideTable)
+  if type(playerName) == "string" and not playerData[playerName] then 
+    playerData[playerName] = {
+      coordinates = {1, 1},
+      mainColor = colors.red,
+      direction = 1,
+      heldItem = false,
+      keepDirection = false,
+      currentDim = 0,
+      currentMode = 0,
+      currentEnergy = 20,
+      currentHealth = 20,
+      currentDefence = 0,
+      isAlive = true,
+      inventory = {}
+                             }
+  if overrideTable then for k, v in pairs(overrideTable) do playerData[playerName][k] = v end end
+  else return end
+end
+
+function Player.updatePlayers()
+  for playerName in pairs(playerData) do 
+    if playerData[playerName] and playerData[playerName].health <= 0 then playerData[playerName].isAlive = false end
+  end
+end
+
+function Player.setDirection(playerName, newDirection)
+  if verifyPlayer(playerName, {newDirection}) and newDirection >= 1 and newDirection <= 4 and not Player.lockedDirection(playerName) then 
+    playerData[playerName].direction = newDirection
+  end
+end
+
+function Player.getDirection(playerName) if verifyPlayer(playerName) then return playerData[playerName].direction end end
+function Player.lockDirection(playerName, keepDirection) if verifyPlayer(playerName, _, _, {keepDirection}) then playerData[playerName].keepDirection = keepDirection end end
+function Player.lockedDirection(playerName) if verifyPlayer(playerName) then return playerData[playerName].keepDirection end end
+function Player.isAlive(playerName) if verifyPlayer(playerName) then return playerData[playerName].isAlive end end
+
+function Player.setHealth(playerName, healthAmount)
+  if verifyPlayer(playerName, {healthAmount}) then
+    if healthAmount > 20 then healthAmount = 20 end
+    playerData[playerName].currentHealth = healthAmount 
+  end
+end
+function Player.getHealth(playerName) if verifyPlayer(playerName) then return playerData[playerName].currentHealth end end
+
+function Player.setEnergy(playerName, energyAmount)
+  if verifyPlayer(playerName, {energyAmount}) then
+    if energyAmount > 20 then energyAmount = 20 end
+    playerData[playerName].currentEnergy = energyAmount 
+  end
+end
+function Player.getEnergy(playerName) if verifyPlayer(playerName) then return playerData[playerName].currentEnergy end end
+
+function Player.setDefense(playerName, defenceAmount)
+  if verifyPlayer(playerName, {defenceAmount}) then
+    if defenceAmount > 20 then defenceAmount = 20 end
+    playerData[playerName].currentDefence = defenceAmount 
+  end
+end
+function Player.getDefense(playerName) if verifyPlayer(playerName) then return playerData[playerName].currentDefence end end
+
+function Player.setCoordinates(playerName, x, y)
+  if not verifyPlayer(playerName) then return end
+  if type(x) == "string" then
+    if string.find(x, "add") then playerData[playerName].coordinates[1] = playerData[playerName].coordinates[1] + (tonumber(x:sub(4)) or 0) end
+    if string.find(x, "sub") then playerData[playerName].coordinates[1] = playerData[playerName].coordinates[1] - (tonumber(x:sub(4)) or 0) end
+  elseif type(x) == "number" then playerData[playerName].coordinates[1] = x end
+
+  if type(y) == "string" then
+    if string.find(y, "add") then playerData[playerName].coordinates[2] = playerData[playerName].coordinates[2] + (tonumber(y:sub(4)) or 0) end
+    if string.find(y, "sub") then playerData[playerName].coordinates[2] = playerData[playerName].coordinates[2] - (tonumber(y:sub(4)) or 0) end
+  elseif type(y) == "number" then playerData[playerName].coordinates[2] = y end
+end
+
+function Player.getCoordinates(playerName) if verifyPlayer(playerName) then return playerData[playerName].coordinates[1], playerData[playerName].coordinates[2] end end
+function Player.setDimension(playerName, newDimension) if verifyPlayer(playerName, {newDimension}) then playerData[playerName].currentDim = newDimension end end
+function Player.getDimension(playerName) if verifyPlayer(playerName) then return playerData[playerName].currentDim end end
+
+function Player.setName(playerName, newPlayerName)
+  if verifyPlayer(playerName, _, {newPlayerName}) and playerName ~= newPlayerName then
+    playerData[newPlayerName] = playerData[playerName]; playerData[playerName] = nil; currentPlayer = newPlayerName
+  end
+end
+
+function Player.getNames()
+  local playerNames = {}
+  for playerName in pairs(playerData) do playerNames[#playerNames + 1] = playerName end
+  return playerNames
+end
+
+function Player.isPlayer(playerName) return verifyPlayer(playerName) end
+function Player.getPlayers() return playerData end
+function Player.setPlayers(newPlayers) if type(newPlayers) == "table" then playerData = newPlayers end end
+function Player.setMode(playerName, newMode) if verifyPlayer(playerName, {newMode}) and (newMode == 0 or newMode == 1) then playerData[playerName].currentMode = newMode end end
+function Player.getMode(playerName) if playerData[playerName] then return playerData[playerName].currentMode end end
+function Player.setColor(playerName, newColor) if verifyPlayer(playerName, {newColor}) and newColor >= 1 and newColor <= 32768 then playerData[playerName].mainColor = newColor end end
+function Player.getColor(playerName) if verifyPlayer(playerName) then return playerData[playerName].mainColor end end
+
+local function updateInventory(playerName)
+  for i = 1, #playerData[playerName].inventory do
+    if playerData[playerName].inventory[i] and playerData[playerName].inventory[i].Amount <= 0 then table.remove(playerData[playerName].inventory, i) end
+    if playerData[playerName].inventory[i] and playerData[playerName].inventory[i].Durability and playerData[playerName].inventory[i].Durability <= 0 then table.remove(playerData[playerName].inventory, i) end
+    if i == Player.getHeldItem() and not playerData[playerName].inventory[i] then playerData[playerName].heldItem = false end
+  end
+end
+
+function Player.giveItem(playerName, id, amount)
+  if verifyPlayer(playerName, {id, amount}) then
+    for i = 1, #playerData[playerName].inventory do
+      if playerData[playerName].inventory[i].ID == id then
+        playerData[playerName].inventory[i].Amount = playerData[playerName].inventory[i].Amount + amount
+        updateInventory(playerName); return
+      end
+    end
+    playerData[playerName].inventory[#playerData[playerName].inventory + 1] = {ID = id, Amount = amount, Durability = Assets[id].durability} -- or false}
+    updateInventory(playerName)
+  end
+end
+
+function Player.removeItem(playerName, id, amount)
+  if verifyPlayer(playerName, {id, amount}) then
+    for i = 1, #playerData[playerName].inventory do
+      if playerData[playerName].inventory[i].ID == id then
+        playerData[playerName].inventory[i].Amount = playerData[playerName].inventory[i].Amount - amount
+      end
+    end
+    updateInventory(playerName)
+  end
+end
+
+function Player.checkInventory(playerName, id)
+  if verifyPlayer(playerName, {id}) then
+    for i = 1, #playerData[playerName].inventory do
+      if playerData[playerName].inventory[i].ID == id then
+        return i, playerData[playerName].inventory[i].Amount
+      end
+    end
+  end
+end
+
+function Player.getInventory(playerName) if verifyPlayer(playerName) then return playerData[playerName].inventory end end
+function Player.setInventory(playerName, newInventory) if verifyPlayer(playerName, _, _, _, {newInventory}) then playerData[playerName].inventory = newInventory end end
+function Player.setCurrentPlayer(playerName) if type(playerName) == "string" then currentPlayer = playerName end end
+function Player.getCurrentPlayer() return currentPlayer end
+function Player.equipItem(playerName, inventorySlot) if verifyPlayer(playerName, {inventorySlot}) and playerData[playerName].inventory[inventorySlot] then playerData[playerName].heldItem = inventorySlot end end
+function Player.getHeldItem(playerName) if verifyPlayer(playerName) then return playerData[playerName].heldItem end end
+
+function Player.getFacingCoords(playerName)
+  if not verifyPlayer(playerName) then return end
+  local playerDirection = playerData[playerName].direction
+  local interactionCoords = {playerData[playerName].coordinates[1], playerData[playerName].coordinates[2]}
+
+  if playerDirection == 1 then interactionCoords[2] = interactionCoords[2] - 1
+  elseif playerDirection == 2 then interactionCoords[1] = interactionCoords[1] + 1
+  elseif playerDirection == 3 then interactionCoords[2] = interactionCoords[2] + 1
+  else interactionCoords[1] = interactionCoords[1] - 1 end
+
+  return interactionCoords[1], interactionCoords[2]
+end
+
+function Player.useItem(playerName)
+  if not verifyPlayer(playerName) then return end
+  if not playerData[playerName].heldItem then return end
+
+  local playerDimension = playerData[playerName].currentDim
+  local playerInventory = playerData[playerName].inventory
+  local playerHeldItem = playerData[playerName].heldItem
+  if not playerInventory[playerHeldItem] then return end
+
+  local OffsetX, OffsetY = Level.getOffset()
+  local interactionCoords = {Player.getFacingCoords(playerName)}
+  local itemID = playerInventory[playerHeldItem].ID
+  local playerItem = Assets[itemID]
+  local entities = Entity.getEntities()
+  local players = playerData
+  local totalDamage = 0
+  if type(Assets[itemID].damage) == "number" then totalDamage = Assets[itemID].damage end
+
+  -- Deals with killing players
+  for player in pairs(players) do 
+    if players[player] and players[player].coordinates[1] == interactionCoords[1] and players[player].coordinates[2] == interactionCoords[2] and playerData[player].currentDim == playerData[playerName].currentDim then
+      players[player].currentHealth = players[player].currentHealth - totalDamage
+      if playerInventory[playerHeldItem].Durability then playerInventory[playerHeldItem].Durability = playerInventory[playerHeldItem].Durability - 1 end
+      Screen.setCursorPos(interactionCoords[1] - OffsetX, interactionCoords[2] - OffsetY - 1)
+      Screen.setTextColor(colors.red); Screen.write(totalDamage); Screen.drawScreen() break
+    end
+  end
+  if players ~= playerData then playerData = players; updateInventory(playerName) return end
+
+  -- Deals with killing entities
+  for i = 1, #entities do
+    if entities[i] and entities[i].coordinates[1] == interactionCoords[1] and entities[i].coordinates[2] == interactionCoords[2] and entities[i].currentDim == playerData[playerName].currentDim then
+      entities[i].health = entities[i].health - totalDamage
+      if playerInventory[playerHeldItem].Durability then playerInventory[playerHeldItem].Durability = playerInventory[playerHeldItem].Durability - 1 end
+      Screen.setCursorPos(interactionCoords[1] - OffsetX, interactionCoords[2] - OffsetY - 1)
+      Screen.setTextColor(colors.red); Screen.write(totalDamage); Screen.drawScreen() break
+    end
+  end
+  if entities ~= Entity.getEntities() then Entity.setEntities(entities); updateInventory(playerName) return end
+
+  -- Deals with placing blocks
+  if (playerItem.type == "block" or playerItem.type == "blocktile") then
+    if Level.checkForCollision(Player.getDimension(playerName), interactionCoords[1], interactionCoords[2]) then return end
+    Level.setData(playerDimension, interactionCoords[1], interactionCoords[2], {Block = {ID = itemID}})
+    Player.removeItem(playerName, itemID, 1)
+
+  -- Deals with placing tiles
+  elseif (playerItem.type == "tile" or playerItem.type == "liquid") then
+    local tileID = Level.getData(playerDimension, interactionCoords[1], interactionCoords[2]).Tile.ID
+    if tileID == 57 or Assets[tileID].type == "liquid" then
+      Level.setData(playerDimension, interactionCoords[1], interactionCoords[2], {Tile = {ID = itemID}})
+      Player.removeItem(playerName, itemID, 1)
+    end
+
+  -- Deals with everything else
+  else
+    Screen.setCursorPos(interactionCoords[1] - OffsetX, interactionCoords[2] - OffsetY)
+    Screen.setBackgroundColor(Level.getTexture(playerDimension, interactionCoords[1], interactionCoords[2], true))
+    Screen.setTextColor(Assets[itemID].texture[1])
+    Screen.write(Assets[itemID].texture[2])
+
+    local Area = Level.getData(playerDimension, interactionCoords[1], interactionCoords[2])
+    if Area.Block and Area.Block.ID and Assets[itemID].damage then
+      if playerItem.type ~= Assets[Area.Block.ID].toolNeeded then totalDamage = totalDamage / 2 end
+      if Assets[Area.Block.ID].unbreakable then totalDamage = 0 end
+
+      if Area.Block.Health then Area.Block.Health = Area.Block.Health - totalDamage 
+      else Area.Block.Health = Assets[Area.Block.ID].health - totalDamage end
+
+      if Area.Block.Health <= 0 then 
+        local drops = Assets[Area.Block.ID].drop
+        for i = 1, #drops / 2 do Player.giveItem(playerName, drops[i * 2 - 1], drops[i * 2]) end; Area.Block = {ID = false} 
+        if playerInventory[playerHeldItem].Durability then playerInventory[playerHeldItem].Durability = playerInventory[playerHeldItem].Durability - 1 end
+      end
+
+      if totalDamage > 0 then
+        Level.setData(playerDimension, interactionCoords[1], interactionCoords[2], Area)
+        Screen.setCursorPos(interactionCoords[1] - OffsetX, interactionCoords[2] - OffsetY - 1)
+      end
+
+    elseif Area.Tile and Area.Tile.ID then
+      if playerItem.type == "shovel" and not Assets[Area.Tile.ID].unbreakable and Assets[Area.Tile.ID].type ~= "liquid" and Area.Tile.ID ~= 57 then 
+        local drops = Assets[Area.Tile.ID].drop
+        for i = 1, #drops / 2 do Player.giveItem(playerName, drops[i * 2 - 1], drops[i * 2]) end
+        if playerInventory[playerHeldItem].Durability then playerInventory[playerHeldItem].Durability = playerInventory[playerHeldItem].Durability - 1 end
+        Area.Tile.ID = 57; Level.setData(playerDimension, interactionCoords[1], interactionCoords[2], Area) 
+      end
+    end
+
+    updateInventory(playerName)
+    _G.Screen = Screen.drawScreen(Screen)
+  end
+end

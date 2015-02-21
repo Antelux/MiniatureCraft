@@ -1,0 +1,80 @@
+_G.Chat = {}
+local chatHistory = {}
+local ScreenWidth, ScreenHeight = Screen.getSize()
+
+local function addMessage(message, private) 
+  local wrap = #message / math.floor(ScreenWidth / 2)
+
+  if wrap <= 1 then chatHistory[#chatHistory + 1] = {message, private or false} 
+  else for i = 1, math.ceil(wrap) do chatHistory[#chatHistory + 1] = {string.sub(message, (math.floor(ScreenWidth / 2) * i) - math.floor(ScreenWidth / 2), math.floor(ScreenWidth / 2) * i - 1), private or false} end end
+end
+
+function Chat.sendMessage(textMessage, playerName)
+  if type(textMessage) ~= "string" then return end; local args = {}
+  for output in string.gmatch(textMessage, "([^%s]+)") do args[#args + 1] = output end
+
+  if string.find(args[1], "/") then
+    if args[1] == "/give" or args[1] == "/i" then 
+      if not args[2] or not args[3] then addMessage(args[1].. " <player> <id> [amount]"); return end
+      Player.giveItem(args[2], tonumber(args[3]), tonumber(args[4]) or 1)
+      addMessage("<Server> Gave " ..(args[4] or 1).. " " ..Level.convertID(tonumber(args[3])).. " to " ..args[2])
+
+    elseif args[1] == "/gamemode" or args[1] == "/gm" then 
+      if not args[2] or not args[3] then addMessage(args[1].. " <player> <mode>"); return end
+      Player.setMode(args[2], tonumber(args[3]))
+      if args[3] == "0" then args[3] = "survival" elseif args[3] == "1" then args[3] = "creative" else args[3] = "?" end
+      addMessage("<Server> Set " ..args[2].. "'s gamemode to " ..args[3])
+
+    elseif args[1] == "/whisper" or args[1] == "/w" then
+      if not args[2] or not args[3] then addMessage(args[1].. " <player> <message>"); return end
+
+    elseif args[1] == "/tp" then 
+      if not args[2] or not args[3] or not args[4] then addMessage("/tp <player> <x> <y>"); return end
+      local currentPlayerX, currentPlayerY = Player.getCoordinates(args[2])
+      local differenceX, differenceY = args[3] - currentPlayerX, args[4] - currentPlayerY
+      local currentOffsetX, currentOffsetY = Level.getOffset()
+      Player.setCoordinates(args[2], tonumber(args[3]), tonumber(args[4]))
+      Level.setOffset(currentOffsetX + differenceX, currentOffsetY + differenceY)
+      addMessage("<Server> Teleported " ..args[2].. " to " ..args[3].. ", " ..args[4])
+
+    elseif args[1] == "/warp" then
+      if not args[2] or not args[3] then addMessage("/warp <player> <dimension>"); return end
+      Player.setDimension(args[2], tonumber(args[3]))
+      addMessage("<Server> Warped " ..args[2].. " to level " ..args[3])
+
+    elseif args[1] == "/say" then
+      local tString = ""
+      for i = 1, #args - 1 do tString = tString.. " " ..args[i + 1] end
+      addMessage("<Server> " ..tString)
+
+    elseif args[1] == "/forcesave" then
+      File.saveWorld(File.getCurrentWorldName()); addMessage("<Server> World saved")
+
+    elseif args[1] == "/help" then
+      addMessage("/give, /gamemode, /whisper, /tp, /warp, /say, /forcesave")
+
+    else addMessage("No such command") end
+  else addMessage("<" ..playerName.. "> " ..textMessage) end
+end
+
+function Chat.getMessages() return chatHistory end
+function Chat.setMessages(newMessages) if type(newMessages) == "table" then chatHistory = newMessages end end
+
+--[[
+&0   colors.black
+&1   colors.blue
+&2   colors.green
+&3   colors.cyan
+&4   colors.red
+&5   colors.purple  
+&6   colors.orange
+&7   colors.lightGray
+&8   colors.gray
+&9   colors.magenta
+&A   colors.lime
+&B   colors.lightBlue
+&C   colors.brown
+&D   colors.pink
+&E   colors.yellow
+&F   colors.white
+--]]
