@@ -67,9 +67,6 @@ function Buffer.createBuffer(x, y, width, height, termIsColor)
         drawScreen = function(termObject, x, y, w, h)
             oldColorList = colorList; colorList = {}
             if termObject.Active then 
-                nativeTerm.setBackgroundColor(colors.black)
-                nativeTerm.clear()
-                
                 if termObject.CursorBlink then nativeTerm.setCursorBlink(false) end
                 local currentTColor = termObject.TColor
 
