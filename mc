@@ -28,7 +28,7 @@ local ScreenWidth, ScreenHeight = term.getSize()
 local debugMode, hideGUI = false, true
 local multiplayer = false
 local askForUpdate = false
---local checkForUpdates = true
+local checkForUpdates = true
  
 local MainFolder = shell.getRunningProgram():sub(1, #shell.getRunningProgram() - #fs.getName(shell.getRunningProgram()))
 local APIFolder, ModsFolder, SavesFolder = MainFolder.. "/API", MainFolder.. "/Mods", MainFolder.. "/Saves"
