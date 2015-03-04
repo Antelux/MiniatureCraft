@@ -18,7 +18,6 @@
     * Re-add Lighting
     * Save storage table
     * Save blocks / tiles that have an ID bigger than 255
-    * Fix Crafting Bug
     * Random Spawn Placement
 --]]
 
@@ -65,7 +64,7 @@ end
 
 _G.File = {}
 
-function File.getVersion() return "1.94d-Beta" end
+function File.getVersion() return "1.94e-Beta" end
 function File.getAssets()
     return {
     -- Blocks --

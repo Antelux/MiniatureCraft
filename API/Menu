@@ -162,7 +162,8 @@ local function openCraftingInterface(eventData, currentPlayer)
 
   if not craftingTables[tableID].Recipes[selected].Input then return end
   for i = 1, #craftingTables[tableID].Recipes[selected].Input / 2 do
-    if (Player.getMode(currentPlayer) == 0 and Player.checkInventory(currentPlayer, craftingTables[tableID].Recipes[selected].Input[(i * 2) - 1])) or Player.getMode(currentPlayer) == 1 then Screen.setTextColor(colors.lightGray) else Screen.setTextColor(colors.gray) end
+    local slot, amountHave = Player.checkInventory(currentPlayer, craftingTables[tableID].Recipes[selected].Input[(i * 2) - 1])
+    if (Player.getMode(currentPlayer) == 0 and amountHave and amountHave >= craftingTables[tableID].Recipes[selected].Input[i * 2]) or Player.getMode(currentPlayer) == 1 then Screen.setTextColor(colors.lightGray) else Screen.setTextColor(colors.gray) end
     Write(width * 2 - 1, y + 4 + i, "x" ..craftingTables[tableID].Recipes[selected].Input[i * 2])
     Write(width + 4, y + 4 + i, shortenString(Level.convertID(craftingTables[tableID].Recipes[selected].Input[(i * 2) - 1]) or "Unknown", width - 4))
   end
