@@ -1,20 +1,17 @@
 local nativeTerm = term.native()
 local sx, sy = nativeTerm.getSize()
-local decToHex = {[1] = "0", [2] = "1", [4] = "2", [8] = "3", [16] = "4", [32] = "5", [64] = "6", [128] = "7", [256] = "8", [512] = "9", [1024] = "self.act", [2048] = "b", [4096] = "c", [8192] = "d", [16384] = "e", [32768] = "f"}
-local colorList, oldColorList = {}, {}
+local decToHex = {[1] = "0", [2] = "1", [4] = "2", [8] = "3", [16] = "4", [32] = "5", [64] = "6", [128] = "7", [256] = "8", [512] = "9", [1024] = "a", [2048] = "b", [4096] = "c", [8192] = "d", [16384] = "e", [32768] = "f"}
 
 local function getColorOf(hex) return math.pow(2, tonumber(hex, 16)) end
 local function colorIsValid(color, isColor)
-    if isColor then if color < 1 or color > 32768 then error("Colour out of range", 2) end
-    else if color ~= 1 or color ~= 32768 then error("Colour out of range", 2) end end return true
+    if type(color) ~= "number" then return end
+    if isColor then if color < 1 or color > 32768 then return end
+    else if color ~= 1 or color ~= 32768 then return end end return true
 end
 
-local function checkColor(x, y, col)
-    for k, v in pairs(colorList) do
-        if k == col then colorList[k][#colorList[k] + 1] = {x, y}; return colorList end
-    end
-    colorList[col] = {{x, y}}; return colorList
-end
+-- To do:
+--
+-- Find a way to only draw the changes on screen.
 
 _G.Buffer = {}
 function Buffer.createBuffer(x, y, width, height, termIsColor)
@@ -38,8 +35,8 @@ function Buffer.createBuffer(x, y, width, height, termIsColor)
     local terminalFunctions = {
         isColor = function(termObject) return termObject.TermIsColor end,
         write = function(termObject, ...)
-            local tString = ... or ""
-            if termObject.CursorX < 1 or termObject.CursorY > termObject.Width or termObject.CursorY < 1 or termObject.CursorY > termObject.Height or #tString == 0 then return end
+            local tString = tostring(...) or ""
+            if termObject.CursorX < 1 or termObject.CursorX > termObject.Width or termObject.CursorY < 1 or termObject.CursorY > termObject.Height or #tString == 0 then return end
             termObject.textScreen[termObject.CursorY] = string.sub(termObject.textScreen[termObject.CursorY], 1, termObject.CursorX - 1) ..tString.. string.sub(termObject.textScreen[termObject.CursorY], termObject.CursorX + #tString)
             termObject.textColor[termObject.CursorY] = string.sub(termObject.textColor[termObject.CursorY], 1, termObject.CursorX - 1) ..string.rep(decToHex[termObject.TColor], #tString).. string.sub(termObject.textColor[termObject.CursorY], termObject.CursorX + #tString)
             termObject.backColor[termObject.CursorY] = string.sub(termObject.backColor[termObject.CursorY], 1, termObject.CursorX - 1) ..string.rep(decToHex[termObject.BColor], #tString).. string.sub(termObject.backColor[termObject.CursorY], termObject.CursorX + #tString)
@@ -65,30 +62,24 @@ function Buffer.createBuffer(x, y, width, height, termIsColor)
         setBackgroundColor = function(termObject, color) if colorIsValid(color, termObject.TermIsColor) then termObject.BColor = color end end,
 
         drawScreen = function(termObject, x, y, w, h)
-            oldColorList = colorList; colorList = {}
             if termObject.Active then 
                 if termObject.CursorBlink then nativeTerm.setCursorBlink(false) end
-                local currentTColor = termObject.TColor
+                local currentTColor, currentBColor = termObject.TColor, termObject.BColor
 
-                for y = 1, termObject.Height do
-                    for x = 1, termObject.Width do
-                        checkColor(x, y, getColorOf(string.sub(termObject.backColor[y], x, x)) or termObject.BColor)
-                    end
-                end
-                for k, v in pairs(colorList) do
-                    nativeTerm.setBackgroundColor(k)
-                    for j = 1, #colorList[k] do
-                        local colX, colY = colorList[k][j][1], colorList[k][j][2]
-                        local textColor = getColorOf(string.sub(termObject.textColor[colY], colX, colX)) or termObject.TColor
-                        if textColor ~= currentTColor then currentTColor = textColor; nativeTerm.setTextColor(currentTColor) end
-                        nativeTerm.setCursorPos(colX + (termObject.OffsetX - 1), colY + (termObject.OffsetY - 1))
-                        nativeTerm.write(string.sub(termObject.textScreen[colY], colX, colX) or " ")
+                for x = 1, termObject.Width do
+                    for y = 1, termObject.Height do
+                        nativeTerm.setCursorPos(x, y)
+                        local text = getColorOf(string.sub(termObject.textColor[y], x, x)) or termObject.TColor
+                        local back = getColorOf(string.sub(termObject.backColor[y], x, x)) or termObject.BColor
+                        if back ~= currentBColor then nativeTerm.setBackgroundColor(back); currentBColor = back end
+                        if text ~= currentTColor then nativeTerm.setTextColor(text); currentTColor = text end
+                        nativeTerm.write(string.sub(termObject.textScreen[y], x, x) or " ")
                     end
                 end
 
-                nativeTerm.setBackgroundColor(termObject.BColor)
-                nativeTerm.setTextColor(termObject.TColor)
                 if termObject.CursorBlink then 
+                    nativeTerm.setBackgroundColor(termObject.BColor)
+                    nativeTerm.setTextColor(termObject.TColor)
                     nativeTerm.setCursorPos(termObject.CursorX, termObject.CursorY)
                     nativeTerm.setCursorBlink(true) 
                 end

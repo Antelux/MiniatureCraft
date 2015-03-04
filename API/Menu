@@ -5,16 +5,17 @@ local selected, altSelected, switch = 1, 1, false
 local mainFolder = File.getMainDirectory()
 
 --[[
-  Conversion of Menu API to Interface API
+  Conversion of Menu API to Interface API (To do)
 
-  Interace.newInterface(interfaceName, {
+  Interace.newInterface(interfaceName, { -- Showing off types of elements
     gui = {{shapeType, isBordered, color, x, y, width, height}},
     text = {{string, backgroundColor, foregroundColor, x, y}},
     button = {{string, backgroundColor, foregroundColor, x, y, functionOnClick}},
     input = {{string, backgroundColor, foregroundColor, x, y, functionOnReturn}}
   })
 
-  Use the Computercraft Graphics Library for the gui table (shapeType)
+  Get permission to use the Computercraft Graphics Library for the gui table (shapeType)
+  http://www.computercraft.info/forums2/index.php?/topic/20827-computercraft-graphics-library/
 --]]
 
 _G.Menu = {}
@@ -90,6 +91,25 @@ local function translateKey(key, value, maxValue, manual)
   return value
 end
 
+local nString, history = "",  {}
+local function newRead(eventData, x, y, maxWidth)
+  if not eventData then return end
+  local maxWidth = maxWidth or 100
+  Screen.setCursorBlink(true)
+
+  if eventData[1] == "char" then if #nString < maxWidth then nString = nString.. eventData[2]; end 
+  elseif eventData[1] == "key" then
+    if eventData[2] == 14 then nString = string.sub(nString, 1, #nString - 1);  
+    elseif eventData[2] == 28 then Screen.setCursorBlink(false); return nString end
+  end
+
+  Screen.setBackgroundColor(colors.gray)
+  Screen.setTextColor(colors.white)
+  Screen.setCursorPos(x, y)
+  Screen.write(nString)
+  Screen.drawScreen()
+end
+
 function Menu.newInterface(interfaceName, newInterface)
   if type(interfaceName) ~= "string" or type(newInterface) ~= "function" then return end; menuInterfaces[interfaceName] = newInterface
 end
@@ -137,8 +157,6 @@ local function openCraftingInterface(eventData, currentPlayer)
       local assetName = Level.convertID(craftingTables[tableID].Recipes[i].Output[1])
       if type(assetName) ~= "string" then return end
       if i == selected then Screen.write("[" ..shortenString(assetName, width - 4).. "]") else Screen.write(shortenString(assetName, width - 4)) end
-    else
-      if i == selected then Screen.write("[ERROR]") else Screen.write("ERROR") end
     end
   end
 
@@ -208,25 +226,26 @@ local sizeOptions = {
 local levelSelection, sizeSelection = 1, 1
 local createNewWorld = false
 local worldName = "World"
+local shouldRead = false
 
 local function levelMenu(eventData)
   local fileList = fs.list(mainFolder.. "/Saves")
 
-  if eventData[1] == "key" then
+  if eventData[1] == "key" and not shouldRead then
     if createNewWorld then sizeSelection = translateKey(eventData[2], sizeSelection, 3)
     else levelSelection = translateKey(eventData[2], levelSelection, #fileList)
-    if eventData[2] == 28 then File.loadWorld(fileList[levelSelection]); return "singlePlayer" end end
+    if eventData[2] == 28 and fileList[levelSelection] then File.loadWorld(fileList[levelSelection]); return "singlePlayer" end end
 
-  elseif eventData[1] == "mouse_scroll" then 
+  elseif eventData[1] == "mouse_scroll" and not shouldRead then 
     if createNewWorld then sizeSelection = translateKey(_, sizeSelection, 3, eventData[2])
     else levelSelection = translateKey(_, levelSelection, #fileList, eventData[2]) end
 
-  elseif eventData[1] == "mouse_click" then
-    if eventData[3] >= ((ScreenWidth - 12) / 2) and eventData[3] <= ((ScreenWidth - 12) / 2) + 3 and eventData[4] == ScreenHeight - 4 and not createNewWorld then createNewWorld = true end
-    if eventData[3] >= ((ScreenWidth - 12) / 2) - 1 and eventData[3] <= ((ScreenWidth - 12) / 2) + 3 and eventData[4] == 13 and createNewWorld then createNewWorld = false end
+  elseif eventData[1] == "mouse_click" and not shouldRead then
+    if eventData[3] >= ((ScreenWidth - 12) / 2) and eventData[3] <= ((ScreenWidth - 12) / 2) + 3 and eventData[4] == ScreenHeight - 4 and not createNewWorld then createNewWorld = true; levelSelection = 1 end
+    if eventData[3] >= ((ScreenWidth - 12) / 2) - 1 and eventData[3] <= ((ScreenWidth - 12) / 2) + 3 and eventData[4] == 13 and createNewWorld then createNewWorld = false; sizeSelection = 1; worldName = "World" end
     if eventData[3] >= ((ScreenWidth - 14) / 2) - 1 and eventData[3] <= ((ScreenWidth - 14) / 2) + 15 and eventData[4] == 12 and createNewWorld then 
       paintutils.drawLine(((ScreenWidth - 12) / 2) - 1, 12, ((ScreenWidth - 12) / 2) + 14, 12, colors.gray)
-      Screen.setTextColor(colors.white); Screen.setCursorPos(((ScreenWidth - 14) / 2), 12); worldName = read()
+      Screen.setTextColor(colors.white); Screen.setCursorPos(((ScreenWidth - 14) / 2), 12); shouldRead = true 
     end
     if eventData[3] >= ((ScreenWidth - 12) / 2) + 5 and eventData[3] <= ((ScreenWidth - 12) / 2) + 12 and eventData[4] == 13 and createNewWorld then
       local currentPlayer = Player.getCurrentPlayer()
@@ -235,7 +254,7 @@ local function levelMenu(eventData)
       Player.giveItem(currentPlayer, 13, 1) -- Crafting Table
       Player.giveItem(currentPlayer, 210, 3) -- Apple
       Level.setWorld(Level.newWorld(sizeOptions[sizeSelection][2], sizeOptions[sizeSelection][2]))
-      File.saveWorld(worldName); createNewWorld = false
+      File.saveWorld(worldName); createNewWorld = false; worldName = "World"
     end
   end
 
@@ -249,7 +268,12 @@ local function levelMenu(eventData)
     end
     Screen.setTextColor(colors.lightBlue); Write(((ScreenWidth - 12) / 2), 13, "BACK"); Write(((ScreenWidth - 12) / 2) + 6, 13, "GENERATE");
     paintutils.drawLine(((ScreenWidth - 12) / 2) - 1, 12, ((ScreenWidth - 12) / 2) + 14, 12, colors.gray)
-    Screen.setTextColor(colors.white); Write(((ScreenWidth - 14) / 2), 12, worldName)
+    if not shouldRead then
+      Screen.setTextColor(colors.white); Write(((ScreenWidth - 14) / 2), 12, worldName)
+    else
+      local name = newRead(eventData, ((ScreenWidth - 12) / 2) - 1, 12, 16)
+      if name then worldName = name; shouldRead = false end
+    end
   else
     Screen.setTextColor(colors.white)
     Write(((ScreenWidth - 12) / 2) + offset, 7, "SELECT WORLD")
@@ -269,14 +293,14 @@ local function timeoutMenu(eventData) end
 local function modsMenu(eventData) end
 
 local optionOptions = {{"NAME:"}, {"COLOR:"}}
+local isReading = false
+
 local function optionsMenu(eventData) 
-  if eventData[1] == "mouse_click" then
+  if eventData[1] == "mouse_click" and not isReading then
     if eventData[3] >= ((ScreenWidth - 12) / 2) - 4 and eventData[3] <= ((ScreenWidth - 12) / 2) + 12 and eventData[4] == 9 then
       File.setCurrentColor(2 ^ (eventData[3] - math.floor((ScreenWidth - 12) / 2) + 3))
     elseif eventData[3] >= ((ScreenWidth - 12) / 2) - 5 and eventData[3] <= ((ScreenWidth - 12) / 2) + 11 and eventData[4] == 8 then
-      paintutils.drawLine(((ScreenWidth - 12) / 2) - 4, 8, ((ScreenWidth - 12) / 2) + 11, 8, colors.gray)
-      Screen.setTextColor(colors.white); Screen.setCursorPos(((ScreenWidth - 12) / 2) - 4, 8)
-      File.setCurrentPlayer(read())
+      paintutils.drawLine(((ScreenWidth - 12) / 2) - 4, 8, ((ScreenWidth - 12) / 2) + 11, 8, colors.gray); isReading = true
     end      
   end
     
@@ -289,29 +313,38 @@ local function optionsMenu(eventData)
   Write(((ScreenWidth - 12) / 2) - 10, 9, "COLOR:")
   paintutils.drawLine(((ScreenWidth - 12) / 2) - 4, 8, ((ScreenWidth - 12) / 2) + 11, 8, colors.gray)
   Screen.setTextColor(colors.white)
-  Write(((ScreenWidth - 12) / 2) - 4, 8, playerName)
-
+  if not isReading then Write(((ScreenWidth - 12) / 2) - 4, 8, playerName) end
+  
   for i = 1, 16 do
     Screen.setBackgroundColor(2 ^ (i - 1))
     if playerColor == 1 then Screen.setTextColor(colors.black) else Screen.setTextColor(colors.white) end
     if 2 ^ (i - 1) == playerColor then Write(((ScreenWidth - 12) / 2) - 4 + i, 9, "X")
     else Write(((ScreenWidth - 12) / 2) - 4 + i, 9, " ") end
   end
+
+  if isReading then
+    local name = newRead(eventData, ((ScreenWidth - 12) / 2) - 4, 8, 16)
+    if name then File.setCurrentPlayer(name); isReading = false end
+  end
 end
 
 local menuChoices = {
-  {"SINGLEPLAYER", 8, levelMenu},
-  {"MULTIPLAYER", 21, serverMenu},
-  {"MODS", 33, modsMenu},
-  {"OPTIONS", 38, optionsMenu}
+  {"SINGLE", 8, levelMenu},
+  {"MULTI", 15, serverMenu},
+  {"NEWS", 21, function() end},
+  {"MODS", 26, modsMenu},
+  {"OPTIONS", 31, optionsMenu},
+  {"QUIT?", 39, function() end}
 }
 
 if pocket then
   menuChoices = {
-    {"SI", 8, levelMenu},
-    {"MU", 11, serverMenu},
-    {"MO", 14, modsMenu},
-    {"OPT", 17, optionsMenu}
+    {"S", 8, levelMenu},
+    {"MU", 10, serverMenu},
+    {"N", 13, function() end},
+    {"MO", 15, modsMenu},
+    {"O", 18, optionsMenu},
+    {"QU", 20, function() end}
   }
 end
 
@@ -340,10 +373,23 @@ local function openStartInterface(eventData)
   if pocket then drawMenuBox(7, 4, ScreenWidth - 12, ScreenHeight - 6, "MC " ..File.getVersion(), colors.black, colors.blue); Screen.setCursorPos(8, 5)
   else drawMenuBox(7, 4, ScreenWidth - 12, ScreenHeight - 6, "MINIATURECRAFT " ..File.getVersion(), colors.black, colors.blue); Screen.setCursorPos(8, 5) end
   for i = 1, #menuChoices do
-    Screen.setTextColor(colors.gray); if selected == i then Screen.setTextColor(colors.cyan) end
+    Screen.setTextColor(colors.gray); if selected == i then if selected == #menuChoices then Screen.setTextColor(colors.red) else Screen.setTextColor(colors.cyan) end end
     Screen.write(menuChoices[i][1]); Screen.setTextColor(colors.blue); Screen.write("|")
   end
   Screen.setCursorPos(8, 6); Screen.write(string.rep("-", ScreenWidth - 14))
+
+  if selected == #menuChoices then 
+    local nativeTerm = term.native()
+    term.redirect(nativeTerm)
+    _G.error = nativeError; _G.nativeError = nil
+    _G.printError = nativePrintError; _G.nativePrintError = nil
+    _G.Level = {}; _G.Player = {}; _G.File = {}; _G.Crafting = {}; _G.Chat = {}; _G.Entity = {}; _G.Buffer = {}; _G.Screen = {};
+    nativeTerm.setBackgroundColor(colors.black); nativeTerm.setTextColor(colors.yellow)
+    nativeTerm.clear(); nativeTerm.setCursorPos(1, 1); print("Thanks for playing MiniatureCraft by Detective_Smith!")
+    nativeTerm.setTextColor(colors.white)
+    term.redirect(term.current())
+    error()
+  end
   return menuChoices[selected][3](eventData)
 end
 
@@ -356,7 +402,7 @@ end
 local tString, history, scroll = "",  {}, 0
 local function chatInterface(eventData, playerName)
   local chatHistory = Chat.getMessages()
-    local scrollOffset = (#chatHistory - 6); if scrollOffset < 0 then scrollOffset = 0 end
+  local scrollOffset = (#chatHistory - 6); if scrollOffset < 0 then scrollOffset = 0 end
 
   Screen.setCursorBlink(true)
   if eventData[1] == "char" then if #tString < ScreenWidth then tString = tString.. eventData[2]; end 

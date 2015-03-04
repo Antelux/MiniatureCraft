@@ -15,7 +15,7 @@ end
 
 function Entity.updateEntities()
   for i = 1, #entityData do
-    if entityData[i] and entityData[i].health <= 0 then entityData[i] = nil end --table.remove{entityData, i} end
+    if entityData[i] and entityData[i].health <= 0 then entityData[i] = nil end
   end
 end
 

@@ -1,4 +1,4 @@
---[[ To do
+--[[ To do (Future Stuffs)
   * switchTexture = {} - The texture used when a block is switched on or off, i.e. levers. {\, /}
   * poweredTexture = {} - The texture for blocks when powered by redstone
   * poweredInputs = {} - The sides that can take power
@@ -8,14 +8,18 @@
   Might not implement this.
 
   * whitelist / blacklist = {} - Sets what tiles it can be placed on
+
+  * maxStack = number - Tells the game whats the max amount you can carry for that type of item, 
+                        I should make the blocks have a default max stack of 99, and items default
+                        to 1.
 --]]
 
---[[ To do
-    * Lighting
-    * Make better entity scripts
+--[[ To do (To release as 2.0)
+    * Re-add Lighting
     * Save storage table
-    * Read / Write Save files in binary, using 1 or 2 bytes
-    * Make the buffer change only what needs to be changed
+    * Save blocks / tiles that have an ID bigger than 255
+    * Fix Crafting Bug
+    * Random Spawn Placement
 --]]
 
 local function growIntoATree(dim, x, y)
@@ -61,15 +65,15 @@ end
 
 _G.File = {}
 
--- Returns the default assets.
+function File.getVersion() return "1.94d-Beta" end
 function File.getAssets()
     return {
     -- Blocks --
     [1] = {name = "Stone", health = 20, drop = {1, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.gray, "L"}},
     [2] = {name = "Wood", health = 10, drop = {2, 1}, type = "block", toolNeeded = "axe", texture = {colors.brown, colors.gray, "L"}},
-    [3] = {name = "Leaves", health = 1, drop = {5, 1}, type = "block", texture = {colors.green, colors.lime, "#"}},
-    [4] = {name = "Cactus", health = 3, drop = {4, 1}, type = "block", texture = {_, colors.green, "#"}},
-    [5] = {name = "Sapling", health = 1, script = growIntoATree, drop = {5, 1}, type = "block", texture = {_, colors.brown, "T"}},
+    [3] = {name = "Leaves", health = 0.5, drop = {5, 1}, type = "block", texture = {colors.green, colors.lime, "#"}},
+    [4] = {name = "Cactus", health = 1, drop = {4, 1}, type = "block", texture = {_, colors.green, "#"}},
+    [5] = {name = "Sapling", health = 0.5, script = growIntoATree, drop = {5, 1}, type = "block", texture = {_, colors.brown, "T"}},
     -- 6
     [7] = {name = "Hard Rock", unbreakable = true, health = 50, drop = {1, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.gray, colors.lightGray, "L"}},
     [8] = {name = "Coal Ore", health = 25, drop = {213, 1, 1, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.black, "+"}},
@@ -89,9 +93,9 @@ function File.getAssets()
     [23] = {name = "Redstone Ore", health = 25, drop = {23, 4, 1, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.red, "+"}},
     [24] = {name = "Redstone Block", health = 25, drop = {24, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.red, colors.white, "L"}},
     [25] = {name = "Chest", health = 10, interface = "Chest", drop = {25, 1}, inventory = 32, type = "block", toolNeeded = "axe", texture = {colors.brown, colors.white, "v"}},
-    [26] = {name = "Dandelion", health = 1, drop = {26, 1}, type = "blocktile", texture = {_, colors.yellow, "*"}},
-    [27] = {name = "Azul", health = 1, drop = {27, 1}, type = "blocktile", texture = {_, colors.blue, "*"}},
-    [28] = {name = "Rose", health = 1, drop = {28, 1}, type = "blocktile", texture = {_, colors.red, "*"}},
+    [26] = {name = "Dandelion", health = 0.5, drop = {26, 1}, type = "blocktile", texture = {_, colors.yellow, "*"}},
+    [27] = {name = "Azul", health = 0.5, drop = {27, 1}, type = "blocktile", texture = {_, colors.blue, "*"}},
+    [28] = {name = "Rose", health = 0.5, drop = {28, 1}, type = "blocktile", texture = {_, colors.red, "*"}},
     [29] = {name = "Torch", lightSource = 4, health = 1, drop = {29, 1}, type = "blocktile", texture = {_, colors.brown, "i"}},    
     [30] = {name = "Glowstone", lightSource = 5, health = 4, drop = {30, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.yellow, colors.orange, "L"}},
     [31] = {name = "Netherrack", health = 6, drop = {31, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.red, colors.brown, "L"}},
@@ -103,7 +107,7 @@ function File.getAssets()
     -- Testy stuff --
     [45] = {name = "Test:Flame", type = "block", texture = {colors.red, colors.orange, "%", colors.orange, colors.yellow, "%", colors.yellow, colors.white, "%", colors.orange, colors.yellow, "%"}},
     [46] = {name = "Test:Pulsar", type = "block", texture = {colors.blue, colors.cyan, "O", colors.cyan, colors.lightBlue, "O", colors.lightBlue, colors.white, "O", colors.cyan, colors.lightBlue, "O"}},
-    [47] = {name = "Test:Gear", type = "block", texture = {_, colors.gray, "+"}, poweredTexture = {_, colors.gray, "x", _, colors.gray, "+"}},
+    [47] = {name = "Test:Gear", type = "block", texture = {_, colors.gray, "+", _, colors.gray, "x"}},
     [48] = {name = "Test:Fan", type = "block", offTexture = {colors.gray, colors.lightGray, "-"}, texture = {colors.gray, colors.lightGray, "\\", colors.gray, colors.lightGray, "|", colors.gray, colors.lightGray, "/", colors.gray, colors.lightGray, "-"}},
     [49] = {name = "Test:Rainbow", type = "block", texture = {colors.lightBlue, colors.white, "-", colors.cyan, colors.white, "\\", colors.green, colors.white, "|", colors.lime, colors.white, "/", colors.yellow, colors.white, "-", colors.orange, colors.white, "\\", colors.red, colors.white, "|", colors.magenta, colors.white, "/", colors.purple, colors.white, "-", colors.blue, colors.white, "\\"}},
 
@@ -141,11 +145,11 @@ function File.getAssets()
     [103] = {name = "Wood Shovel", durability = 64, damage = 2, type = "shovel", texture = {colors.brown, "!"}},
     [104] = {name = "Wood Hoe", durability = 64, damage = 1, type = "hoe", texture = {colors.brown, "j"}},
 
-    [105] = {name = "Rock Sword", durability = 128, damage = 4, type = "sword", texture = {colors.gray, "/"}},
-    [106] = {name = "Rock Pickaxe", durability = 128, damage = 3, type = "pickaxe", texture = {colors.gray, "T"}},
-    [107] = {name = "Rock Axe", durability = 128, damage = 3, type = "axe", texture = {colors.gray, "P"}},
-    [108] = {name = "Rock Shovel", durability = 128, damage = 3, type = "shovel", texture = {colors.gray, "!"}},
-    [109] = {name = "Rock Hoe", durability = 128, damage = 2, type = "hoe", texture = {colors.gray, "j"}},
+    [105] = {name = "Stone Sword", durability = 128, damage = 4, type = "sword", texture = {colors.gray, "/"}},
+    [106] = {name = "Stone Pickaxe", durability = 128, damage = 3, type = "pickaxe", texture = {colors.gray, "T"}},
+    [107] = {name = "Stone Axe", durability = 128, damage = 3, type = "axe", texture = {colors.gray, "P"}},
+    [108] = {name = "Stone Shovel", durability = 128, damage = 3, type = "shovel", texture = {colors.gray, "!"}},
+    [109] = {name = "Stone Hoe", durability = 128, damage = 2, type = "hoe", texture = {colors.gray, "j"}},
 
     [110] = {name = "Iron Sword", durability = 256, damage = 5, type = "sword", texture = {colors.lightGray, "/"}},
     [111] = {name = "Iron Pickaxe", durability = 256, damage = 4, type = "pickaxe", texture = {colors.lightGray, "T"}},

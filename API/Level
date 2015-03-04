@@ -163,7 +163,10 @@ end
 -- Sets the ID of a tile and/or block at a specific point.
 function Level.setData(dim, x, y, newData)
   if type(newData) ~= "table" then return end
-  local currentBlock, currentTile = currentWorld[dim][x][y].Block, currentWorld[dim][x][y].Tile
+  local currentBlock, currentTile
+  if currentWorld[dim] and currentWorld[dim][x] and currentWorld[dim][x][y] then
+    currentBlock, currentTile = currentWorld[dim][x][y].Block, currentWorld[dim][x][y].Tile
+  else return end
   
   if newData.Block and newData.Block.ID then
     if type(newData.Block.ID) == "string" then newData.Block.ID = tonumber(newData.Block.ID) end

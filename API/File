@@ -25,7 +25,6 @@ function File.getCurrentPlayer() return optionData.playerName end
 function File.setCurrentColor(newColor) optionData.playerColor = newColor; reloadOptions(true) end
 function File.getCurrentColor() return optionData.playerColor end
 function File.getCurrentWorldName() return levelName end
-function File.getVersion() return "2.0 Beta" end
 
 -- Merges two tables together, used for putting mod assets with the main ones.
 local function mergeTables(addon, original)
@@ -61,11 +60,9 @@ end
 
 -- Loads the games assets, and mods aswell.
 function File.loadAssets()
-  -- Merges the mods assets with the games ones.
-  for i = 1, #loadedMods do
+  for i = 1, #loadedMods do -- Merges the mods assets with the games ones.
     if loadedMods[i].Assets then Assets = mergeTables(loadedMods[i].Assets, Assets) end
   end
-
   return Assets
 end
 
@@ -83,7 +80,6 @@ function File.addMod(modTable)
   }
 end
  
--- See if chaning | or : makes a difference in size
 -- Save and load the storage table
 function File.saveWorld(worldName)
   if type(worldName) ~= "string" then return end
@@ -93,15 +89,12 @@ function File.saveWorld(worldName)
   local WorldData = fs.open(SavePath.. "/world.data", "w"); WorldData.write(textutils.serialize(currentWorld["size"])); WorldData.close()
   for dimension in pairs(currentWorld) do
     if dimension ~= "size" then
-      local World, fileString = fs.open(SavePath.. "/Dimension/" ..dimension, "w"), ""
+      local World = fs.open(SavePath.. "/Dimension/" ..dimension, "wb") 
       for y = 1, currentWorld["size"][2] do
         for x = 1, currentWorld["size"][1] do
-          local Tile = currentWorld[dimension][x][y].Tile; fileString = fileString.. "" .. Tile.ID
-          local Block = currentWorld[dimension][x][y].Block or false; if Block and Block.ID then fileString = fileString.. ":" ..Block.ID end
-          if x ~= currentWorld["size"][1] then fileString = fileString.. "|" end
+          World.write(currentWorld[dimension][x][y].Tile.ID or 0)
+          World.write(currentWorld[dimension][x][y].Block.ID or 0)
         end
-        World.writeLine(fileString)
-        fileString = ""
         os.queueEvent("yield"); os.pullEvent("yield")
       end
       World.close()
@@ -129,12 +122,13 @@ function File.loadWorld(worldName)
   local Dimensions = fs.list(SavePath.. "/Dimension/"); table.sort(Dimensions, function(a, b) return a > b end)
   Level.worldBase(Length, Width, Dimensions[3], Dimensions[1])
   for _, dimension in ipairs(Dimensions) do
-    local World = fs.open(SavePath.. "/Dimension/" ..dimension, "r")
-    local Line, y = World.readLine(), 1
-    while Line do
-      local Data = splitWorldString(Line, "|")
-      for x = 1, #Data do Level.setData(tonumber(dimension), x, y, {Block = {ID = Data[x].Block}, Tile = {ID = Data[x].Tile}}) end
-      Line = World.readLine(); y = y + 1
+    local World = fs.open(SavePath.. "/Dimension/" ..dimension, "rb")
+    for y = 1, Length do
+      for x = 1, Width do
+        local tile = World.read(); local block = World.read()
+        if tile and tile ~= 0 then Level.setData(tonumber(dimension), x, y, {Tile = {ID = tile}}) end
+        if block and block ~= 0 then Level.setData(tonumber(dimension), x, y, {Block = {ID = block}}) end
+      end
     end
     World.close()
     os.queueEvent("yield"); os.pullEvent("yield")

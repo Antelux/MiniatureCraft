@@ -26,25 +26,26 @@ if not term.isColor then error("Advanced Computer Required to Play.", 2) end
 
 local ScreenWidth, ScreenHeight = term.getSize()
 local debugMode, hideGUI = false, true
-local nativeTerm = term.native()
 local multiplayer = false
+local askForUpdate = false
+--local checkForUpdates = true
  
 local MainFolder = shell.getRunningProgram():sub(1, #shell.getRunningProgram() - #fs.getName(shell.getRunningProgram()))
 local APIFolder, ModsFolder, SavesFolder = MainFolder.. "/API", MainFolder.. "/Mods", MainFolder.. "/Saves"
+if MainFolder == "" then MainFolder = "/" end
 
-dofile(MainFolder.. "/Assets")
 dofile(APIFolder.. "/Buffer")
+_G.Screen = Buffer.createBuffer()
+term.redirect(Screen)
 
+_G.nativeError = error
+_G.nativePrintError = printError
 _G.error = function(...)
-  fs.delete("errorlog")
-  local file = fs.open("errorlog", "w")
+  fs.delete(MainFolder.. "errorlog")
+  local file = fs.open(MainFolder.. "errorlog", "w")
   file.writeLine(...); file.close()
 end
 _G.printError = _G.error
-
-_G.Screen = Buffer.createBuffer()
---_G.Screen.drawScreen = function() end
-term.redirect(Screen)
 
 --[[
 local attachedPeripherals = peripheral.getNames()
@@ -57,6 +58,7 @@ for i = 1, #attachedPeripherals do
 end
 --]]
 
+dofile(MainFolder.. "/Assets")
 for n, sFile in ipairs(fs.list(APIFolder)) do dofile(APIFolder.. "/" ..sFile) end; File.loadMods()
 local World = Level.newWorld(ScreenWidth, ScreenHeight); Level.setWorld(World)
 local Width, Height = Level.getSize()
@@ -74,17 +76,56 @@ local selectedAsset = 1
 local Dimension = 0
 local PlayerX, PlayerY = 0, 0 
 
+
+if checkForUpdates and http then
+  local latestVersion = http.get("http://pastebin.com/raw.php?i=N2FmL2Q7")
+  
+  if not latestVersion then return end
+  if latestVersion.readAll() ~= File.getVersion() then askForUpdate = true end
+  latestVersion.close()
+  
+  if askForUpdate then
+    Screen.setBackgroundColor(colors.black); Screen.setTextColor(colors.white)
+    Screen.clear(); Screen.setCursorPos(1, 1); Screen.write("Updating... "); Screen.drawScreen()
+    print("Grabbing Installer."); Screen.drawScreen()
+    local updater = http.get("http://pastebin.com/raw.php?i=FgAggvy1")
+    local tempFile = fs.open(MainFolder.. "/.tempUpdater", "w")
+    tempFile.write(updater.readAll())
+    tempFile.close()
+    print("Installer Downloaded. Running"); Screen.drawScreen()
+    shell.run(MainFolder.. "/.tempUpdater", MainFolder)
+    print("Update Complete. Deleting Installer."); Screen.drawScreen()
+    fs.delete(MainFolder.. "/.tempUpdater")
+    shell.run(MainFolder.. "mc"); nativeError()
+  end
+end
+
+local startTime, endTime
+local draw = Screen.drawScreen
+_G.Screen.drawScreen = function()
+  endTime = os.clock()
+  if debugMode then
+    local AssetName = Assets[selectedAsset]
+    if AssetName then AssetName = AssetName.name else AssetName = "None" end
+    Screen.setBackgroundColor(colors.gray)
+    Screen.setTextColor(colors.white)
+    Screen.setCursorPos(1, 1)
+    Screen.write("X: " ..PlayerX.. ", Y: " ..PlayerY.. ", T: " ..AssetName.. ":" ..selectedAsset.. ", FPS: " ..string.sub(tostring((endTime - startTime) * 4), 1, 3))
+  end
+  draw()
+end
+
 local function checkOffset(ValueX, ValueY)
-  local ValueX, ValueY = ValueX or 0, ValueY or 0
-  local OffsetX2, OffsetY2 = OffsetX + ValueX, OffsetY + ValueY 
+  local OffsetX2, OffsetY2 = OffsetX + (ValueX or 0), OffsetY + (ValueY or 0)
   if PlayerX - OffsetX2 < math.floor(ScreenWidth / 2) or math.floor(ScreenWidth / 2) < PlayerX - OffsetX2 then OffsetX2 = OffsetX end
   if PlayerY - OffsetY2 < math.floor(ScreenHeight / 2) or math.floor(ScreenHeight / 2) < PlayerY - OffsetY2 then OffsetY2 = OffsetY end
   Level.setOffset(OffsetX2, OffsetY2)
 end
 
+local demoDimension = math.random(-3, 0)
 local function updateScreen(update, useAnimations)
   OffsetX, OffsetY = Level.getOffset()
-  Dimension = Player.getDimension(currentPlayer) or 0
+  Dimension = Player.getDimension(currentPlayer) or demoDimension
   if not update then Level.updateArea(Dimension, OffsetX, OffsetY, OffsetX + ScreenWidth, OffsetY + ScreenHeight) end
 
   -- Draws the initial world --
@@ -195,15 +236,6 @@ local function updateScreen(update, useAnimations)
       end
     end
   end
-
-  if debugMode then
-    local AssetName = Assets[selectedAsset]
-    if AssetName then AssetName = AssetName.name else AssetName = "None" end
-    Screen.setBackgroundColor(colors.gray)
-    Screen.setTextColor(colors.white)
-    Screen.setCursorPos(1, 1)
-    Screen.write("X: " ..PlayerX.. ", Y: " ..PlayerY.. ", T: " ..AssetName.. ":" ..selectedAsset)
-  end
 end
 
 --[[
@@ -291,7 +323,7 @@ local function drawInterface(eventData)
 end
 
 function singlePlayer()
-  while true do
+  while true do startTime = os.clock()
     local eventData = {os.pullEvent()}; World = Level.getWorld()
     if eventData[1] == "timer" then
       if eventData[2] == drawUpdateTimer then updateScreen(); if drawInterface(eventData) then break end; Screen.drawScreen(); drawUpdateTimer = os.startTimer(0.5)  
@@ -306,10 +338,11 @@ end
 while true do
   local eventData = {os.pullEvent()}
   if eventData[1] == "term_resize" then ScreenWidth, ScreenHeight = term.getSize() end
-  if (eventData[1] == "timer" and eventData[2] == drawUpdateTimer) or eventData[1] == "key" or string.find(eventData[1], "mouse_") then 
+  if (eventData[1] == "timer" and eventData[2] == drawUpdateTimer) or eventData[1] == "key" or string.find(eventData[1], "mouse_") or eventData[1] == "char" then 
     if eventData[1] == "timer" then drawUpdateTimer = os.startTimer(0.5); updateScreen(true) end
     local action = Menu.getInterface("StartMenu")(eventData, currentPlayer); Screen.drawScreen()  
-    if action == "singlePlayer" then hideGUI = false; Width, Height = Level.getSize(); singlePlayer() end
+    if action == "singlePlayer" then hideGUI = false; Width, Height = Level.getSize(); World = Level.getWorld();
+    updateScreen(); Screen.drawScreen(); drawUpdateTimer = os.startTimer(0.5); singlePlayer() end
   end
 end
 

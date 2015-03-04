@@ -252,6 +252,7 @@ function Player.useItem(playerName)
       if totalDamage > 0 then
         Level.setData(playerDimension, interactionCoords[1], interactionCoords[2], Area)
         Screen.setCursorPos(interactionCoords[1] - OffsetX, interactionCoords[2] - OffsetY - 1)
+        Screen.write(totalDamage)
       end
 
     elseif Area.Tile and Area.Tile.ID then
@@ -264,6 +265,6 @@ function Player.useItem(playerName)
     end
 
     updateInventory(playerName)
-    _G.Screen = Screen.drawScreen(Screen)
+    Screen.drawScreen()
   end
 end
