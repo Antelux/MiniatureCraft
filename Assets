@@ -10,15 +10,24 @@
   * whitelist / blacklist = {} - Sets what tiles it can be placed on
 
   * maxStack = number - Tells the game whats the max amount you can carry for that type of item, 
-                        I should make the blocks have a default max stack of 99, and items default
-                        to 1.
+                        I should make the blocks have a default max stack of 99, and items default to 1.
 --]]
 
 --[[ To do (To release as 2.0)
     * Re-add Lighting
-    * Save storage table
     * Save blocks / tiles that have an ID bigger than 255
-    * Random Spawn Placement
+    * Save entities
+--]]
+
+--[[ What's new this version:
+    -- Added NoColor Support (To an extent).
+    -- Faster Buffer* (Around 0.05 Seconds faster, give or take).
+    -- Fixed a bug where mods wouldn't load properly.
+    -- Random Spawn Placement
+    -- New functions: Level.setSpawnPoint(), Level.getSpawnPoint(); Player.hurt(); Player.heal()
+    -- Storage table is now saved and loaded (Things like chests keep their contents now).
+    -- Working entities.
+    -- Less crashy commands.
 --]]
 
 local function growIntoATree(dim, x, y)
@@ -53,21 +62,25 @@ local function staircaseUp(dim, x, y) changePlayerDimension(dim, x, y, 1) end
 local function staircaseDown(dim, x, y) changePlayerDimension(dim, x, y, -1) end
 
 local function passiveMobScript(entityID) 
+    if math.random(4) ~= 1 then return end
     local newDirection = math.random(4)
     Entity.setDirection(entityID, newDirection)
     Entity.move(entityID, 1, true)
 end
 
 local function hostileMobScript(entityID) 
+    if math.random(4) ~= 1 then return end
+    local newDirection = math.random(4)
+    Entity.setDirection(entityID, newDirection)
+    Entity.move(entityID, 1, true)
 
 end
 
 _G.File = {}
-
-function File.getVersion() return "1.94e-Beta" end
+function File.getVersion() return "1.96c-Beta" end
 function File.getAssets()
     return {
-    -- Blocks --
+    -- [Blocks] --
     [1] = {name = "Stone", health = 20, drop = {1, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.gray, "L"}},
     [2] = {name = "Wood", health = 10, drop = {2, 1}, type = "block", toolNeeded = "axe", texture = {colors.brown, colors.gray, "L"}},
     [3] = {name = "Leaves", health = 0.5, drop = {5, 1}, type = "block", texture = {colors.green, colors.lime, "#"}},
@@ -81,7 +94,7 @@ function File.getAssets()
     [11] = {name = "Gem Ore", health = 40, drop = {218, 1, 1, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.lightBlue, "+"}},
     -- 12
     [13] = {name = "Crafting Table", health = 5, drop = {13, 1}, type = "block", toolNeeded = "axe", texture = {colors.lightGray, colors.brown, "#"}},
-    [14] = {name = "Furnace", health = 5, drop = {14, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.gray, colors.red, "U", colors.gray, colors.orange, "U", colors.gray, colors.yellow, "U", colors.gray, colors.orange, "U"}},
+    [14] = {name = "Furnace", health = 8, drop = {14, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.gray, colors.red, "U", colors.gray, colors.orange, "U", colors.gray, colors.yellow, "U", colors.gray, colors.orange, "U"}},
     [15] = {name = "Coal Block", health = 35, drop = {15, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.black, colors.black, "L"}},
     [16] = {name = "Iron Block", health = 40, drop = {16, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.white, "L"}},
     [17] = {name = "Gold Block", health = 45, drop = {17, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.yellow, colors.white, "L"}},
@@ -103,14 +116,14 @@ function File.getAssets()
     [34] = {name = "Door", health = 5, interface = "doorclosed", drop = {34, 1}, type = "block", toolNeeded = "axe", texture = {_, colors.brown, "D"}},
     [35] = {name = "Door_Open", health = 5, interface = "dooropen", drop = {34, 1}, type = "blocktile", toolNeeded = "axe", texture = {_, colors.brown, "l"}},
 
-    -- Testy stuff --
+    -- [Testy Stuff] --
     [45] = {name = "Test:Flame", type = "block", texture = {colors.red, colors.orange, "%", colors.orange, colors.yellow, "%", colors.yellow, colors.white, "%", colors.orange, colors.yellow, "%"}},
     [46] = {name = "Test:Pulsar", type = "block", texture = {colors.blue, colors.cyan, "O", colors.cyan, colors.lightBlue, "O", colors.lightBlue, colors.white, "O", colors.cyan, colors.lightBlue, "O"}},
     [47] = {name = "Test:Gear", type = "block", texture = {_, colors.gray, "+", _, colors.gray, "x"}},
     [48] = {name = "Test:Fan", type = "block", offTexture = {colors.gray, colors.lightGray, "-"}, texture = {colors.gray, colors.lightGray, "\\", colors.gray, colors.lightGray, "|", colors.gray, colors.lightGray, "/", colors.gray, colors.lightGray, "-"}},
     [49] = {name = "Test:Rainbow", type = "block", texture = {colors.lightBlue, colors.white, "-", colors.cyan, colors.white, "\\", colors.green, colors.white, "|", colors.lime, colors.white, "/", colors.yellow, colors.white, "-", colors.orange, colors.white, "\\", colors.red, colors.white, "|", colors.magenta, colors.white, "/", colors.purple, colors.white, "-", colors.blue, colors.white, "\\"}},
 
-    -- Tiles --
+    -- [Tiles] --
     [50] = {name = "Grass", drop = {55, 1}, type = "tile", texture = {colors.lime, colors.green, ">"}},
     [51] = {name = "Water", type = "liquid", texture = {colors.blue, colors.lightBlue, "}", colors.blue, colors.cyan, "}"}},
     -- 52, 53, 54
@@ -133,11 +146,12 @@ function File.getAssets()
     [71] = {name = "Aged Potato", drop = {204, 1, 229, 4}, type = "tile", texture = {colors.brown, colors.yellow, "#"}},
     [72] = {name = "Growing Carrot", drop = {204, 1, 231, 1}, type = "tile", texture = {colors.brown, colors.green, "#"}},
     [73] = {name = "Aged Carrot", drop = {204, 1, 231, 4}, type = "tile", texture = {colors.brown, colors.orange, "#"}},
+    [74] = {name = "Hay", drop = {74, 1}, type = "block", texture = {_, colors.yellow, "#"}},
 
-    -- Testy stuff --
-    [74] = {name = "Test:??????", type = "liquid", texture = {colors.green, colors.lime, ";", colors.green, colors.lime, "'", colors.green, colors.lime, "*", colors.green, colors.lime, "~", colors.green, colors.lime, ":"}},
+    -- [Testy Stuff] --
+    [75] = {name = "Test:??????", type = "liquid", texture = {colors.green, colors.lime, ";", colors.green, colors.lime, "'", colors.green, colors.lime, "*", colors.green, colors.lime, "~", colors.green, colors.lime, ":"}},
 
-    -- tools --
+    -- [Tools] --
     [100] = {name = "Wood Sword", durability = 64, damage = 3, type = "sword", texture = {colors.brown, "/"}},
     [101] = {name = "Wood Pickaxe", durability = 64, damage = 2, type = "pickaxe", texture = {colors.brown, "T"}},
     [102] = {name = "Wood Axe", durability = 64, damage = 2, type = "axe", texture = {colors.brown, "P"}},
@@ -171,7 +185,7 @@ function File.getAssets()
     [150] = {name = "Punch", damage = 1, type = "punch", texture = {colors.yellow, "@"}},
     [151] = {name = "Bow", durability = 256, damage = 1, type = "bow", projectile = 152, texture = {colors.brown, "}"}},
 
-    -- Items --
+    -- [Items] --
     [207] = {name = "Seeds", placeableFarm = 59, type = "item", texture = {colors.green, ";"}},
     [208] = {name = "Wheat", type = "item", texture = {colors.yellow, "#"}},
       
@@ -189,9 +203,7 @@ function File.getAssets()
     [219] = {name = "Slime", type = "item", texture = {colors.lime, "o"}},
     [220] = {name = "Glass", type = "item", texture = {colors.lightGray, "L"}},
     [221] = {name = "Wool", type = "item", texture = {colors.white, "#"}},
-    [222] = {name = "Cloud", placeableBlock = 11, type = "item", texture = {colors.white, "@"}},
-    -- 223, 224
-    [225] = {name = "Snow", placeableTile = 69, type = "item", texture = {colors.white, "o"}},
+    -- 222 - 225
     [226] = {name = "Stick", type = "item", texture = {colors.brown, "/"}},
 
     [229] = {name = "Potato", replenish = 1, placeableFarm = 70, type = "food", texture = {colors.yellow, "o"}},
@@ -202,53 +214,31 @@ function File.getAssets()
     [234] = {name = "Cooked Pork", replenish = 8, type = "food", texture = {colors.yellow, "$"}},
 
     [235] = {name = "Redstone", type = "item", texture = {colors.red, "+"}},
-    [236] = {name = "Redstone Block", placeableBlock = 24, type = "item", texture = {colors.red, "L"}},
-    [237] = {name = "Coal Block", placeableBlock = 15, type = "item", texture = {colors.black, "L"}},
-    [238] = {name = "Iron Block", placeableBlock = 16, type = "item", texture = {colors.lightGray, "L"}},
-    [239] = {name = "Gold Block", placeableBlock = 17, type = "item", texture = {colors.yellow, "L"}},
-    [240] = {name = "Gem Block", placeableBlock = 18, type = "item", texture = {colors.lightBlue, "L"}},
+    -- 236 - 240
 
     [241] = {name = "Chains", type = "item", texture = {colors.lightGray, "#"}},
     [242] = {name = "String", type = "item", texture = {colors.white, "~"}},
     [243] = {name = "Bone", type = "item", texture = {colors.white, "/"}},
     [244] = {name = "Rotten Flesh", replenish = 0.5, type = "food", texture = {colors.green, "&"}},
-
-    -- Armor --
-    [300] = {name = "Cloth Helmet", durability = 64, protection = 1, type = "helmet", texture = {colors.brown, "Q"}},
-  	[301] = {name = "Cloth Chestplate", durability = 64, protection = 1, type = "chestplate", texture = {colors.brown, "&"}},
-  	[302] = {name = "Cloth Leggings", durability = 64, protection = 1, type = "leggings", texture = {colors.brown, "H"}},
-  	[303] = {name = "Cloth Boots", durability = 64, protection = 1, type = "boots", texture = {colors.brown, "V"}},
-  	
-    [304] = {name = "Chainmail Helmet", durability = 128, protection = 2, type = "helmet", texture = {colors.lightGray, "Q"}},
-  	[305] = {name = "Chainmail Chestplate", durability = 128, protection = 2, type = "chestplate", texture = {colors.lightGray, "&"}},
-  	[306] = {name = "Chainmail Leggings", durability = 128, protection = 2, type = "leggings", texture = {colors.lightGray, "H"}},
-  	[307] = {name = "Chainmail Boots", durability = 128, protection = 2, type = "boots", texture = {colors.lightGray, "V"}},
-  	 
-    [308] = {name = "Iron Helmet", durability = 256, protection = 3, type = "helmet", texture = {colors.lightGray, "Q"}},
-  	[309] = {name = "Iron Chestplate", durability = 256, protection = 3, type = "chestplate", texture = {colors.lightGray, "&"}},
-    [310] = {name = "Iron Leggings", durability = 256, protection = 3, type = "leggings", texture = {colors.lightGray, "H"}},
-  	[311] = {name = "Iron Boots", durability = 256, protection = 3, type = "boots", texture = {colors.lightGray, "V"}},
-  	 
-    [312] = {name = "Gold Helmet", durability = 512, protection = 4, type = "helmet", texture = {colors.yellow, "Q"}},
-  	[313] = {name = "Gold Chestplate", durability = 512, protection = 4, type = "chestplate", texture = {colors.yellow, "&"}},
-  	[314] = {name = "Gold Leggings", durability = 512, protection = 4, type = "leggings", texture = {colors.yellow, "H"}},
-  	[315] = {name = "Gold Boots", durability = 512, protection = 4, type = "boots", texture = {colors.yellow, "V"}},
-  	
-    [316] = {name = "Gem Helmet", durability = 1024, protection = 5, type = "helmet", texture = {colors.lightBlue, "Q"}},
-  	[317] = {name = "Gem Chestplate", durability = 1024, protection = 5, type = "chestplate", texture = {colors.lightBlue, "&"}},
-  	[318] = {name = "Gem Leggings", durability = 1024, protection = 5, type = "leggings", texture = {colors.lightBlue, "H"}},
-  	[319] = {name = "Gem Boots", durability = 1024, protection = 5, type = "boots", texture = {colors.lightBlue, "V"}},
-
-    -- Entitys --
+    -- 300 - 319, Reserved for armors.
+    
+    -- [Entitys] --
+    -- Proposed method for bigger entities                                                     >
+    -- The index is the offset value for the entity. For example,. this entity would look like >
+    --  texture = {                                                                            >
+    --      [-1] = {["up"] = {_, colors.white, "^"}, ["down"] = {_, colors.white, "V"}, ["left"] = {_, colors.white, "<"}, ["right"] = {_, colors.white, ">"}}
+    --      [0] = {["up"] = {_, colors.white, "^"}, ["down"] = {_, colors.white, "V"}, ["left"] = {_, colors.white, "<"}, ["right"] = {_, colors.white, ">"}}
+    --      [1] = {["up"] = {_, colors.white, "^"}, ["down"] = {_, colors.white, "V"}, ["left"] = {_, colors.white, "<"}, ["right"] = {_, colors.white, ">"}}
+    --  }
     [400] = {name = "Zombie", health = 20, weapon = 150, type = "undead", drop = {244, 2}, texture = {colors.lime, "@"}, script = hostileMobScript},
-    [401] = {name = "Skeleton", health = 20, weapon = 151, type = "undead", drop = {243, 2}, texture = {colors.white, "^", Sym2 = ">", Sym3 = "V", Sym4 = "<"}, script = hostileMobScript},
+    [401] = {name = "Skeleton", health = 20, weapon = 151, type = "undead", drop = {243, 2}, texture = {colors.white, "^"}, script = hostileMobScript},
     [402] = {name = "Spider", health = 16, weapon = 150, type = "living", drop = {242, 2}, texture = {colors.black, "@"}, script = hostileMobScript},
 
     [450] = {name = "Cow", health = 16, type = "living", drop = {211, 2}, texture = {colors.brown, "@"}, script = passiveMobScript},
     [451] = {name = "Pig", health = 16, type = "living", drop = {233, 2}, texture = {colors.pink, "@"}, script = passiveMobScript},
     [452] = {name = "Sheep", health = 10, type = "living", drop = {221, 2}, texture = {colors.white, "@"}, script = passiveMobScript},
     
-    [152] = {name = "Arrow", life = 10, damage = 3, type = "projectile", texture = {colors.white, "-", colors.white, "|"}},
-    [153] = {name = "Snowball", life = 10, damage = 0.1, type = "projectile", texture = {colors.white, "o"}}
+    [480] = {name = "Arrow", life = 10, damage = 3, type = "projectile", texture = {colors.white, "-", colors.white, "|"}},
+    [481] = {name = "Snowball", life = 10, damage = 0.1, type = "projectile", texture = {colors.white, "o"}}
     }
 end

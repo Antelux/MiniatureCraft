@@ -4,6 +4,7 @@ local OffsetX, OffsetY = 0, 0
 local currentWorld
 local lightingMap = {}
 local currentTime
+local spawnPoint = {}
 
 local function mapLoop(world, dim, func, sx, sy, ex, ey)
   if not world or not world[dim] then return end
@@ -58,18 +59,17 @@ local function mapBrush(world, dim, x, y, asset, size)
   return world
 end
 
-local function addLight(dim, x, y, amount)
+local function addLight(dim, x, y, size)
   for radius = 1, size, 0.1 do
-    local radStep = 1 / 0.5 * amount
+    local radStep = 1 / radius
     for angle = 1, math.pi + radStep, radStep do
-      local pX, pY = math.cos(angle) * radius * 0.5, math.sin(angle) * radius
+      local pX = (math.cos(angle) * radius)
+      local pY = (math.sin(angle) * radius) 
       for i = -1, 1, 2 do
         for j = -1, 1, 2 do
-          lightingMap[#lightingMap + 1] = {
-            Dimension = dim, 
-            X = math.floor(x + i * pX), 
-            Y = math.floor(y + j * pY)
-          }
+          lightingMap[dim] = {}
+          lightingMap[dim][math.floor(x + i * pX)] = {}
+          lightingMap[dim][math.floor(x + i * pX)][math.floor(y + j * pY)] = true
         end
       end
     end
@@ -116,9 +116,14 @@ function Level.getTime() return newTime end
 function Level.setWorld(world) if type(world) == "table" then currentWorld = world end end -- Sets the current map
 function Level.getWorld() return currentWorld end -- Gets the current map
 function Level.getSize() return currentWorld["size"][1], currentWorld["size"][2] end
+function Level.setSpawnPoint(newSpawn) if type(newSpawn) == "table" then spawnPoint = newSpawn end end
+function Level.getSpawnPoint() return spawnPoint end
 
 function Level.updateArea(dimension, sx, sy, ex, ey)
+  --local px, py = Player.getCoordinates("Jazz"); addLight(0, px, py, 10)
+
   currentWorld = mapLoop(currentWorld, dimension, function(x, y, area) 
+    if not area["center"].Tile.ID then return end
     -- Covers dirt with grass 
     if dimension == 0 then
       if area["center"].Tile.ID == 55 and area["center"].Block.ID == false and (area["left"].Tile.ID == 50 or area["right"].Tile.ID == 50 or area["up"].Tile.ID == 50 or area["down"].Tile.ID == 50) then 

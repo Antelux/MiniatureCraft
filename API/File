@@ -51,16 +51,16 @@ end
 function File.getMainDirectory() return MainFolder end
 
 function File.loadMods()
-  local foundMods = fs.list(File.getMainDirectory().. "/Mods/")
+  local foundMods = fs.list(MainFolder.. "/Mods/")
   for _, file in ipairs(foundMods) do
     parentMod = file
-    File.runScript(File.getMainDirectory().. "/Mods/" ..file) 
+    File.runScript(MainFolder.. "/Mods/" ..file) 
   end
 end
 
 -- Loads the games assets, and mods aswell.
 function File.loadAssets()
-  for i = 1, #loadedMods do -- Merges the mods assets with the games ones.
+  for i = 1, #loadedMods do -- Merges the mod assets with the games ones.
     if loadedMods[i].Assets then Assets = mergeTables(loadedMods[i].Assets, Assets) end
   end
   return Assets
@@ -73,10 +73,10 @@ function File.getLoadedMods() return loadedMods end
 function File.addMod(modTable) 
   loadedMods[#loadedMods + 1] = {
     ParentMod = parentMod or "Unknown",
-    Name = modTable.name or "Unknown",
-    Author = modTable.author or "Unknown",
-    Info = modTable.info or "This mod lacks a description! ):", 
-    Assets = modTable.assets or false
+    Name = modTable.name or modTable[1] or "Unknown",
+    Author = modTable.author or modTable[2] or "Unknown",
+    Info = modTable.info or modTable[3] or "This mod lacks a description! ):", 
+    Assets = modTable.assets or modTable[4] or false
   }
 end
  
@@ -84,22 +84,27 @@ end
 function File.saveWorld(worldName)
   if type(worldName) ~= "string" then return end
   local SavePath, currentWorld = File.getMainDirectory().. "/Saves/" ..worldName, Level.getWorld()
+  local worldData = {["Size"] = currentWorld["size"], ["Spawn"] = Level.getSpawnPoint()}
   fs.delete(SavePath.. "/Dimension"); fs.delete(SavePath.. "/players.data"); fs.makeDir(SavePath.. "/Dimension")
   local Players = fs.open(SavePath.. "/players.data", "w"); Players.write(textutils.serialize(Player.getPlayers())); Players.close()
-  local WorldData = fs.open(SavePath.. "/world.data", "w"); WorldData.write(textutils.serialize(currentWorld["size"])); WorldData.close()
+  local WorldData = fs.open(SavePath.. "/world.data", "w"); WorldData.write(textutils.serialize(worldData)); WorldData.close()
+  local StorageTable = {}
   for dimension in pairs(currentWorld) do
     if dimension ~= "size" then
       local World = fs.open(SavePath.. "/Dimension/" ..dimension, "wb") 
       for y = 1, currentWorld["size"][2] do
         for x = 1, currentWorld["size"][1] do
-          World.write(currentWorld[dimension][x][y].Tile.ID or 0)
-          World.write(currentWorld[dimension][x][y].Block.ID or 0)
+          if currentWorld[dimension][x][y].Tile.ID <= 255 then World.write(currentWorld[dimension][x][y].Tile.ID or 0) end
+          if not currentWorld[dimension][x][y].Block.ID or currentWorld[dimension][x][y].Block.ID <= 255 then World.write(currentWorld[dimension][x][y].Block.ID or 0) end
+          if currentWorld[dimension][x][y].Tile.storage and currentWorld[dimension][x][y].Tile.storage ~= {} then StorageTable[#StorageTable + 1] = {I = currentWorld[dimension][x][y].Tile.ID, D = dimension, X = x, Y = y, T = "T", S = currentWorld[dimension][x][y].Tile.storage} end
+          if currentWorld[dimension][x][y].Block.storage and currentWorld[dimension][x][y].Block.storage ~= {} then StorageTable[#StorageTable + 1] = {I = currentWorld[dimension][x][y].Block.ID, D = dimension, X = x, Y = y, T = "B", S = currentWorld[dimension][x][y].Block.storage} end
         end
         os.queueEvent("yield"); os.pullEvent("yield")
       end
       World.close()
     end
   end
+  local Storage = fs.open(SavePath.. "/storage.data", "w"); Storage.write(textutils.serialize(StorageTable)); Storage.close()
 end
 
 local function splitWorldString(str)
@@ -118,7 +123,9 @@ function File.loadWorld(worldName)
   local SavePath, Length, Width = File.getMainDirectory().. "/Saves/" ..worldName
   if not fs.exists(SavePath) then return end
   local Players = fs.open(SavePath.. "/players.data", "r"); Player.setPlayers(textutils.unserialize(Players.readAll())); Players.close()
-  local WorldData = fs.open(SavePath.. "/world.data", "r"); local Size = textutils.unserialize(WorldData.readAll()); Length, Width = Size[1], Size[2]; WorldData.close()
+  local WorldData = fs.open(SavePath.. "/world.data", "r"); local Data = textutils.unserialize(WorldData.readAll())
+  local Storage = fs.open(SavePath.. "/storage.data", "r"); local StorageTable = textutils.unserialize(Storage.readAll())
+  local Length, Width = Data["Size"][1], Data["Size"][2]; Level.setSpawnPoint(Data["Spawn"]); WorldData.close()
   local Dimensions = fs.list(SavePath.. "/Dimension/"); table.sort(Dimensions, function(a, b) return a > b end)
   Level.worldBase(Length, Width, Dimensions[3], Dimensions[1])
   for _, dimension in ipairs(Dimensions) do
@@ -132,6 +139,10 @@ function File.loadWorld(worldName)
     end
     World.close()
     os.queueEvent("yield"); os.pullEvent("yield")
+  end
+  for i = 1, #StorageTable do
+    if StorageTable[i].T == "T" then Level.setData(StorageTable[i].D, StorageTable[i].X, StorageTable[i].Y, {Tile = {ID = StorageTable[i].I, storage = StorageTable[i].S}}) end
+    if StorageTable[i].T == "B" then Level.setData(StorageTable[i].D, StorageTable[i].X, StorageTable[i].Y, {Block = {ID = StorageTable[i].I, storage = StorageTable[i].S}}) end
   end
   local newWorld = Level.getWorld()
   newWorld["size"] = {Length, Width}

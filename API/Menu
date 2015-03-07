@@ -249,12 +249,17 @@ local function levelMenu(eventData)
       Screen.setTextColor(colors.white); Screen.setCursorPos(((ScreenWidth - 14) / 2), 12); shouldRead = true 
     end
     if eventData[3] >= ((ScreenWidth - 12) / 2) + 5 and eventData[3] <= ((ScreenWidth - 12) / 2) + 12 and eventData[4] == 13 and createNewWorld then
+      Level.setWorld(Level.newWorld(sizeOptions[sizeSelection][2], sizeOptions[sizeSelection][2]))
       local currentPlayer = Player.getCurrentPlayer()
       Player.newPlayer(currentPlayer)
       Player.giveItem(currentPlayer, 150, 1) -- Punch Item
       Player.giveItem(currentPlayer, 13, 1) -- Crafting Table
       Player.giveItem(currentPlayer, 210, 3) -- Apple
-      Level.setWorld(Level.newWorld(sizeOptions[sizeSelection][2], sizeOptions[sizeSelection][2]))
+      while true do
+        local rx, ry = math.random(sizeOptions[sizeSelection][2]), math.random(sizeOptions[sizeSelection][2])
+        local Data = Level.getData(0, rx, ry)
+        if Data.Block and Assets[Data.Tile.ID].type ~= "liquid" then Player.setCoordinates(currentPlayer, rx, ry); Level.setSpawnPoint({rx, ry}); break end
+      end
       File.saveWorld(worldName); createNewWorld = false; worldName = "World"
     end
   end

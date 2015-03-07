@@ -46,7 +46,7 @@ function Entity.removeEntity(entityid)
   Entity.updateEntities()
 end
 
-function Entity.setDirection(entityid, newDirection) if verifyEntity(entityid, {entityid, newDirection}) and (newDirection < 1 or newDirection > 4) then entityData[entityid].direction = newDirection end end
+function Entity.setDirection(entityid, newDirection) if verifyEntity(entityid, {newDirection}) and (newDirection >= 1 or newDirection <= 4) then entityData[entityid].direction = newDirection end end
 function Entity.getDirection(entityid) if verifyEntity(entityid) then return entityData[entityid].direction end end
 function Entity.setHealth(entityid, healthAmount) if verifyEntity(entityid {healthAmount}) then entityData[entityid].Health = healthAmount end end
 function Entity.getHealth(entityid) if verifyEntity(entityid) then return entityData[entityid].health end end

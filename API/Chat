@@ -16,20 +16,24 @@ function Chat.sendMessage(textMessage, playerName)
   if string.find(args[1], "/") then
     if args[1] == "/give" or args[1] == "/i" then 
       if not args[2] or not args[3] then addMessage(args[1].. " <player> <id> [amount]"); return end
+      if not Player.isPlayer(args[2]) then addMessage("No such player " ..args[2]); return end
       Player.giveItem(args[2], tonumber(args[3]), tonumber(args[4]) or 1)
       addMessage("<Server> Gave " ..(args[4] or 1).. " " ..Level.convertID(tonumber(args[3])).. " to " ..args[2])
 
     elseif args[1] == "/gamemode" or args[1] == "/gm" then 
       if not args[2] or not args[3] then addMessage(args[1].. " <player> <mode>"); return end
+      if not Player.isPlayer(args[2]) then addMessage("No such player " ..args[2]); return end
       Player.setMode(args[2], tonumber(args[3]))
       if args[3] == "0" then args[3] = "survival" elseif args[3] == "1" then args[3] = "creative" else args[3] = "?" end
       addMessage("<Server> Set " ..args[2].. "'s gamemode to " ..args[3])
 
     elseif args[1] == "/whisper" or args[1] == "/w" then
       if not args[2] or not args[3] then addMessage(args[1].. " <player> <message>"); return end
+      if not Player.isPlayer(args[2]) then addMessage("No such player " ..args[2]); return end
 
     elseif args[1] == "/tp" then 
       if not args[2] or not args[3] or not args[4] then addMessage("/tp <player> <x> <y>"); return end
+      if not Player.isPlayer(args[2]) then addMessage("No such player " ..args[2]); return end
       local currentPlayerX, currentPlayerY = Player.getCoordinates(args[2])
       local differenceX, differenceY = args[3] - currentPlayerX, args[4] - currentPlayerY
       local currentOffsetX, currentOffsetY = Level.getOffset()
@@ -39,6 +43,7 @@ function Chat.sendMessage(textMessage, playerName)
 
     elseif args[1] == "/warp" then
       if not args[2] or not args[3] then addMessage("/warp <player> <dimension>"); return end
+      if not Player.isPlayer(args[2]) then addMessage("No such player " ..args[2]); return end
       Player.setDimension(args[2], tonumber(args[3]))
       addMessage("<Server> Warped " ..args[2].. " to level " ..args[3])
 

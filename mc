@@ -47,17 +47,6 @@ _G.error = function(...)
 end
 _G.printError = _G.error
 
---[[
-local attachedPeripherals = peripheral.getNames()
-local port = 25565
-for i = 1, #attachedPeripherals do
-  if peripheral.getType(attachedPeripherals[i]) ~= "modem" then return end
-  modem = peripheral.wrap(attachedPeripherals[i])
-  if not modem.isWireless() then return end
-  modem.open(port)
-end
---]]
-
 dofile(MainFolder.. "/Assets")
 for n, sFile in ipairs(fs.list(APIFolder)) do dofile(APIFolder.. "/" ..sFile) end; File.loadMods()
 local World = Level.newWorld(ScreenWidth, ScreenHeight); Level.setWorld(World)
@@ -76,10 +65,8 @@ local selectedAsset = 1
 local Dimension = 0
 local PlayerX, PlayerY = 0, 0 
 
-
 if checkForUpdates and http then
   local latestVersion = http.get("http://pastebin.com/raw.php?i=N2FmL2Q7")
-  
   if not latestVersion then return end
   if latestVersion.readAll() ~= File.getVersion() then askForUpdate = true end
   latestVersion.close()
@@ -110,7 +97,8 @@ _G.Screen.drawScreen = function()
     Screen.setBackgroundColor(colors.gray)
     Screen.setTextColor(colors.white)
     Screen.setCursorPos(1, 1)
-    Screen.write("X: " ..PlayerX.. ", Y: " ..PlayerY.. ", T: " ..AssetName.. ":" ..selectedAsset.. ", FPS: " ..string.sub(tostring((endTime - startTime) * 4), 1, 3))
+    if Player.getMode(currentPlayer) == 0 then Screen.write("X: " ..PlayerX.. ", Y: " ..PlayerY.. ", FPS: " ..string.sub(tostring((endTime - startTime) * 4), 1, 3))
+    else Screen.write("X: " ..PlayerX.. ", Y: " ..PlayerY.. ", T: " ..AssetName.. ":" ..selectedAsset.. ", FPS: " ..string.sub(tostring((endTime - startTime) * 4), 1, 3)) end
   end
   draw()
 end
@@ -127,20 +115,26 @@ local function updateScreen(update, useAnimations)
   OffsetX, OffsetY = Level.getOffset()
   Dimension = Player.getDimension(currentPlayer) or demoDimension
   if not update then Level.updateArea(Dimension, OffsetX, OffsetY, OffsetX + ScreenWidth, OffsetY + ScreenHeight) end
+  --local lMap = Level.getLightingMap()
 
   -- Draws the initial world --
-  for x = 1, ScreenWidth do 
-    for y = 1, ScreenHeight do 
+  for y = 1, ScreenHeight do 
+    Screen.setCursorPos(1, y)
+    for x = 1, ScreenWidth do 
       local mx, my = x + OffsetX, y + OffsetY
       if mx > Width then mx = Width end
       if mx < 0 then mx = 0 end
       if my > Height then my = Height end
       if my < 0 then my = 0 end
-      Screen.setCursorPos(x, y)
-      local background, foreground, symbol = Level.getTexture(Dimension, mx, my, useAnimations)
-      if type(background) == "number" then Screen.setBackgroundColor(background) else Screen.setBackgroundColor(colors.purple) end
-      if type(foreground) == "number" then Screen.setTextColor(foreground) else Screen.setTextColor(colors.black) end
-      if type(symbol) == "string" then Screen.write(symbol) else Screen.write("#") end
+      --if lMap[Dimension] and lMap[Dimension][mx] and lMap[Dimension][mx][my] then
+      --  Screen.setBackgroundColor(colors.black)
+      --  Screen.write(" ")
+      --else
+        local background, foreground, symbol = Level.getTexture(Dimension, mx, my, useAnimations)
+        if type(background) == "number" then Screen.setBackgroundColor(background) else Screen.setBackgroundColor(colors.purple) end
+        if type(foreground) == "number" then Screen.setTextColor(foreground) else Screen.setTextColor(colors.black) end
+        if type(symbol) == "string" then Screen.write(symbol) else Screen.write("#") end
+      --end
     end
   end
 
@@ -238,23 +232,6 @@ local function updateScreen(update, useAnimations)
   end
 end
 
---[[
-local function getData(message)
-  modem.transmit(port, port, message)
-  local waitTimer = os.startTimer(10)
-  while true do 
-    local eventData = {os.pullEvent()}
-    if eventData[1] == "timer" and eventData[2] == waitTimer then return "timeout" end
-    if eventData[1] == "modem_message" then
-      local data = textutils.unserialize(eventData[5])
-      --if not data or type(data) ~= "table" or type(data[1]) ~= "table" or type(data[2]) ~= "table" then return end
-      Player.setPlayers(data)
-      --Level.setWorld(data[2])
-    end
-  end
-end
---]]
-
 local function inputHandler(eventData)
   currentPlayer = Player.getCurrentPlayer(); if not Player.isAlive(currentPlayer) then return end
   PlayerX, PlayerY = Player.getCoordinates(currentPlayer)
@@ -298,7 +275,7 @@ local function inputHandler(eventData)
     elseif eventData[2] == 14 then currentInterface = Menu.getInterface("PauseMenu") -- Backspace
     elseif eventData[2] == 42 then Player.lockDirection(currentPlayer, not Player.lockedDirection(currentPlayer)) -- Shift
     elseif eventData[2] == 59 then hideGUI = not hideGUI -- F1
-    --elseif eventData[2] == 60 then Entity.spawnEntity(452, Dimension, PlayerX + 1, PlayerY) -- F2
+    elseif eventData[2] == 60 then Entity.spawnEntity(452, Dimension, PlayerX + 1, PlayerY); Entity.spawnEntity(451, Dimension, PlayerX + 1, PlayerY); Entity.spawnEntity(450, Dimension, PlayerX + 1, PlayerY) -- F2
     elseif eventData[2] == 61 then debugMode = not debugMode  -- F3
     elseif eventData[2] == 57 then Player.useItem(currentPlayer) --if multiplayer then getData(textutils.serialize({"Player", "useItem"})); return end -- Space Bar
     elseif eventData[2] == 20 then currentInterface = Menu.getInterface("Chat"); os.queueEvent("key", 14) -- T
@@ -345,20 +322,3 @@ while true do
     updateScreen(); Screen.drawScreen(); drawUpdateTimer = os.startTimer(0.5); singlePlayer() end
   end
 end
-
---[[
-function multiPlayer()
-  multiplayer = true
-  while true do
-    local eventData = {os.pullEvent()}
-    if eventData[1] == "timer" and eventData[2] == drawUpdateTimer then updateScreen(true); drawInterface(eventData); Screen.drawScreen(); drawUpdateTimer = os.startTimer(0.5) end
-    if eventData[1] == "key" or string.find(eventData[1], "mouse_") or eventData[1] == "char" then 
-      if not currentInterface and (eventData[1] == "key" or string.find(eventData[1], "mouse_")) then inputHandler(eventData); updateScreen(true) else updateScreen(true); drawInterface(eventData) end
-      Screen.drawScreen()
-    end
-  end
-  multiplayer = false
-end
-
-multiPlayer()
---]]

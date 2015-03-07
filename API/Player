@@ -50,14 +50,25 @@ function Player.getDirection(playerName) if verifyPlayer(playerName) then return
 function Player.lockDirection(playerName, keepDirection) if verifyPlayer(playerName, _, _, {keepDirection}) then playerData[playerName].keepDirection = keepDirection end end
 function Player.lockedDirection(playerName) if verifyPlayer(playerName) then return playerData[playerName].keepDirection end end
 function Player.isAlive(playerName) if verifyPlayer(playerName) then return playerData[playerName].isAlive end end
-
 function Player.setHealth(playerName, healthAmount)
   if verifyPlayer(playerName, {healthAmount}) then
     if healthAmount > 20 then healthAmount = 20 end
-    playerData[playerName].currentHealth = healthAmount 
+    playerData[playerName].currentHealth = healthAmount; Player.updatePlayers()
   end
 end
+
 function Player.getHealth(playerName) if verifyPlayer(playerName) then return playerData[playerName].currentHealth end end
+function Player.hurt(playerName, damageAmount) 
+  if not verifyPlayer(playerName, {damageAmount}) then return end
+  playerData[playerName].currentHealth = playerData[playerName].currentHealth - damageAmount
+  Player.updatePlayers()
+end
+
+function Player.heal(playerName, healAmount) 
+  if not verifyPlayer(playerName, {healAmount}) then return end
+  playerData[playerName].currentHealth = playerData[playerName].currentHealth + healAmount
+  Player.updatePlayers()
+end
 
 function Player.setEnergy(playerName, energyAmount)
   if verifyPlayer(playerName, {energyAmount}) then

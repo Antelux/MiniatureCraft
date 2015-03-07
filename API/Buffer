@@ -1,6 +1,13 @@
-local nativeTerm = term.native()
+local nativeTerm = term.native(); 
 local sx, sy = nativeTerm.getSize()
 local decToHex = {[1] = "0", [2] = "1", [4] = "2", [8] = "3", [16] = "4", [32] = "5", [64] = "6", [128] = "7", [256] = "8", [512] = "9", [1024] = "a", [2048] = "b", [4096] = "c", [8192] = "d", [16384] = "e", [32768] = "f"}
+
+if term.usingNoColor then 
+    nativeTerm.setTextColor = term.setTextColor
+    nativeTerm.setTextColour = term.setTextColour
+    nativeTerm.setBackgroundColor = term.setBackgroundColor
+    nativeTerm.setBackgroundColour = term.setBackgroundColour
+end
 
 local function getColorOf(hex) return math.pow(2, tonumber(hex, 16)) end
 local function colorIsValid(color, isColor)
@@ -9,19 +16,14 @@ local function colorIsValid(color, isColor)
     else if color ~= 1 or color ~= 32768 then return end end return true
 end
 
--- To do:
---
--- Find a way to only draw the changes on screen.
-
 _G.Buffer = {}
 function Buffer.createBuffer(x, y, width, height, termIsColor)
     local termObject = {
         CursorX = 1, CursorY = 1,
-        OffsetX = x or 1, OffsetY = y or 1,
+        OffsetX = (x or 1) - 1, OffsetY = (y or 1) - 1,
         Width = width or sx, Height = height or sy,
         TColor = colors.white, BColor = colors.black,
         CursorBlink = false,
-        Active = true,
         TermIsColor = termIsColor or nativeTerm.isColor(),
         textScreen = {}, textColor = {}, backColor = {}
     }
@@ -62,28 +64,25 @@ function Buffer.createBuffer(x, y, width, height, termIsColor)
         setBackgroundColor = function(termObject, color) if colorIsValid(color, termObject.TermIsColor) then termObject.BColor = color end end,
 
         drawScreen = function(termObject, x, y, w, h)
-            if termObject.Active then 
-                if termObject.CursorBlink then nativeTerm.setCursorBlink(false) end
-                local currentTColor, currentBColor = termObject.TColor, termObject.BColor
+            if termObject.CursorBlink then nativeTerm.setCursorBlink(false) end
+            local currentTColor, currentBColor = termObject.TColor, termObject.BColor
 
+            for y = 1, termObject.Height do
+                nativeTerm.setCursorPos(1 + termObject.OffsetX, y + termObject.OffsetY)
                 for x = 1, termObject.Width do
-                    for y = 1, termObject.Height do
-                        nativeTerm.setCursorPos(x, y)
-                        local text = getColorOf(string.sub(termObject.textColor[y], x, x)) or termObject.TColor
-                        local back = getColorOf(string.sub(termObject.backColor[y], x, x)) or termObject.BColor
-                        if back ~= currentBColor then nativeTerm.setBackgroundColor(back); currentBColor = back end
-                        if text ~= currentTColor then nativeTerm.setTextColor(text); currentTColor = text end
-                        nativeTerm.write(string.sub(termObject.textScreen[y], x, x) or " ")
-                    end
-                end
-
-                if termObject.CursorBlink then 
-                    nativeTerm.setBackgroundColor(termObject.BColor)
-                    nativeTerm.setTextColor(termObject.TColor)
-                    nativeTerm.setCursorPos(termObject.CursorX, termObject.CursorY)
-                    nativeTerm.setCursorBlink(true) 
+                    local text = getColorOf(string.sub(termObject.textColor[y], x, x)) or termObject.TColor
+                    local back = getColorOf(string.sub(termObject.backColor[y], x, x)) or termObject.BColor
+                    local char = string.sub(termObject.textScreen[y], x, x) or " "
+                    if back ~= currentBColor then nativeTerm.setBackgroundColor(back); currentBColor = back end
+                    if char ~= " " and text ~= currentTColor then nativeTerm.setTextColor(text); currentTColor = text end
+                    nativeTerm.write(char)
                 end
             end
+
+            nativeTerm.setBackgroundColor(termObject.BColor)
+            nativeTerm.setTextColor(termObject.TColor)
+            nativeTerm.setCursorPos(termObject.CursorX, termObject.CursorY)
+            if termObject.CursorBlink then nativeTerm.setCursorBlink(true) end
         end
     }
 
