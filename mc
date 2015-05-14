@@ -30,7 +30,7 @@ local debugMode, hideGUI = false, true
 local multiplayer = false
 local askForUpdate = false
 local targetFPS = 20 -- Sets the target FPS you want the game to run at. Of course, anything above 20 wouldn't work, as 20 is the max always.
---local checkForUpdates = true
+local checkForUpdates = true
  
 local MainFolder = shell.getRunningProgram():sub(1, #shell.getRunningProgram() - #fs.getName(shell.getRunningProgram()))
 local APIFolder, ModsFolder, SavesFolder = MainFolder.. "/API", MainFolder.. "/Mods", MainFolder.. "/Saves"
