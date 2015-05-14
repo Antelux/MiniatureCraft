@@ -76,7 +76,8 @@ function File.addMod(modTable)
     Name = modTable.name or modTable[1] or "Unknown",
     Author = modTable.author or modTable[2] or "Unknown",
     Info = modTable.info or modTable[3] or "This mod lacks a description! ):", 
-    Assets = modTable.assets or modTable[4] or false
+    Assets = modTable.assets or modTable[4] or false,
+    Generation = modTable.generation or modTable[5] or false
   }
 end
  
@@ -84,9 +85,10 @@ end
 function File.saveWorld(worldName)
   if type(worldName) ~= "string" then return end
   local SavePath, currentWorld = File.getMainDirectory().. "/Saves/" ..worldName, Level.getWorld()
-  local worldData = {["Size"] = currentWorld["size"], ["Spawn"] = Level.getSpawnPoint()}
+  local worldData = {["Size"] = currentWorld["size"], ["Spawn"] = Level.getSpawnPoint(), ["Time"] = Level.getTime()} or {}
   fs.delete(SavePath.. "/Dimension"); fs.delete(SavePath.. "/players.data"); fs.makeDir(SavePath.. "/Dimension")
-  local Players = fs.open(SavePath.. "/players.data", "w"); Players.write(textutils.serialize(Player.getPlayers())); Players.close()
+  local Players = fs.open(SavePath.. "/players.data", "w"); Players.write(textutils.serialize(Player.getPlayers() or {})); Players.close()
+  local Entities = fs.open(SavePath.. "/entities.data", "w"); Entities.write(textutils.serialize(Entity.getEntities() or {})); Entities.close()
   local WorldData = fs.open(SavePath.. "/world.data", "w"); WorldData.write(textutils.serialize(worldData)); WorldData.close()
   local StorageTable = {}
   for dimension in pairs(currentWorld) do
@@ -123,9 +125,10 @@ function File.loadWorld(worldName)
   local SavePath, Length, Width = File.getMainDirectory().. "/Saves/" ..worldName
   if not fs.exists(SavePath) then return end
   local Players = fs.open(SavePath.. "/players.data", "r"); Player.setPlayers(textutils.unserialize(Players.readAll())); Players.close()
-  local WorldData = fs.open(SavePath.. "/world.data", "r"); local Data = textutils.unserialize(WorldData.readAll())
-  local Storage = fs.open(SavePath.. "/storage.data", "r"); local StorageTable = textutils.unserialize(Storage.readAll())
-  local Length, Width = Data["Size"][1], Data["Size"][2]; Level.setSpawnPoint(Data["Spawn"]); WorldData.close()
+  local Entities = fs.open(SavePath.. "/entities.data", "r"); Entity.setEntities(textutils.unserialize(Entities.readAll())); Entities.close()
+  local WorldData = fs.open(SavePath.. "/world.data", "r"); local Data = textutils.unserialize(WorldData.readAll()) WorldData.close()
+  local Storage = fs.open(SavePath.. "/storage.data", "r"); local StorageTable = textutils.unserialize(Storage.readAll()) Storage.close()
+  local Length, Width = Data["Size"][1], Data["Size"][2]; Level.setSpawnPoint(Data["Spawn"]); Level.setTime(Data["Time"]) 
   local Dimensions = fs.list(SavePath.. "/Dimension/"); table.sort(Dimensions, function(a, b) return a > b end)
   Level.worldBase(Length, Width, Dimensions[3], Dimensions[1])
   for _, dimension in ipairs(Dimensions) do
@@ -147,10 +150,12 @@ function File.loadWorld(worldName)
   local newWorld = Level.getWorld()
   newWorld["size"] = {Length, Width}
   Level.setWorld(newWorld); levelName = worldName
-  Player.setName(Player.getNames()[1], optionData.playerName)
-  Player.setColor(optionData.playerName, optionData.playerColor)
-  local px, py = Player.getCoordinates(optionData.playerName)
-  Level.setOffset(px - math.ceil(ScreenWidth / 2), py - math.ceil(ScreenHeight / 2))
+  if Level.isSingleplayer() then
+    Player.setName(Player.getNames()[1], optionData.playerName)
+    Player.setColor(optionData.playerName, optionData.playerColor)
+    local px, py = Player.getCoordinates(optionData.playerName)
+    Level.setOffset(px - math.ceil(ScreenWidth / 2), py - math.ceil(ScreenHeight / 2))
+  end
 end
 
 local blockedFiles = {"mc", "Assets", "Mods", "API"}
@@ -160,6 +165,7 @@ local function checkFile(filename)
   for i = 1, #blockedFiles do if result[1] == blockedFiles[i] then return true end end
 end
 
+--[ Replace with just modifying fs and io
 function File.writeToFile(filename, fileTable) 
   if type(filename) ~= "string" or type(fileTable) ~= "table" then return end
   local filename = MainFolder.. "/" ..filename
@@ -192,4 +198,21 @@ function File.exists(filename)
   if type(filename) ~= "string" then return end
   local filename = MainFolder.. "/" ..filename
   if fs.exists(filename) then return true end
+end
+--]
+
+function File.getServerList()
+  if fs.exists(MainFolder.. "/servers.dat") then
+    local file = fs.open(MainFolder.. "/servers.dat", "r")
+    local serverList = textutils.unserialize(file.readAll())
+    file.close()
+    return serverList
+  else return {} end
+end
+
+function File.setServerList(serverList)
+  if type(serverList) ~= "table" then return end
+  local file = fs.open(MainFolder.. "/servers.dat", "w")
+  file.write(textutils.unserialize(file.readAll()))
+  file.close()
 end

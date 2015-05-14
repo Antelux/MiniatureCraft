@@ -65,7 +65,7 @@ function Entity.setCoordinates(entityid, x, y)
   elseif type(y) == "number" then entityData[entityid].coordinates[2] = y end
 end
 
-function Entity.getCoordinates(entityid) if verifyEntity(entityid) then return entityData[entityid].coordinates[1], entityData[entityid].coordinates[2] end end
+function Entity.getCoordinates(entityid) if verifyEntity(entityid) then return unpack(entityData[entityid].coordinates) end end
 function Entity.setDimension(entityid, dimension) if verifyEntity(entityid, {dimension}) then entityData[entityid].currentDim = dimension end end
 function Entity.getDimension(entityid) if verifyEntity(entityid) then return entityData[entityid].currentDim end end
 function Entity.equipItem(entityid, itemid) if verifyEntity(entityid, {itemid}) and Assets[itemid] then entityData[entityid].heldItem = itemid end end

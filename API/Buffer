@@ -2,13 +2,6 @@ local nativeTerm = term.native();
 local sx, sy = nativeTerm.getSize()
 local decToHex = {[1] = "0", [2] = "1", [4] = "2", [8] = "3", [16] = "4", [32] = "5", [64] = "6", [128] = "7", [256] = "8", [512] = "9", [1024] = "a", [2048] = "b", [4096] = "c", [8192] = "d", [16384] = "e", [32768] = "f"}
 
-if term.usingNoColor then 
-    nativeTerm.setTextColor = term.setTextColor
-    nativeTerm.setTextColour = term.setTextColour
-    nativeTerm.setBackgroundColor = term.setBackgroundColor
-    nativeTerm.setBackgroundColour = term.setBackgroundColour
-end
-
 local function getColorOf(hex) return math.pow(2, tonumber(hex, 16)) end
 local function colorIsValid(color, isColor)
     if type(color) ~= "number" then return end
@@ -25,13 +18,17 @@ function Buffer.createBuffer(x, y, width, height, termIsColor)
         TColor = colors.white, BColor = colors.black,
         CursorBlink = false,
         TermIsColor = termIsColor or nativeTerm.isColor(),
-        textScreen = {}, textColor = {}, backColor = {}
+        textScreen = {}, textColor = {}, backColor = {},
+        ots = {}, otc = {}, obc = {}
     }
 
     for i = 1, termObject.Height do 
         termObject.textScreen[i] = string.rep(" ", termObject.Width)
         termObject.textColor[i] = string.rep(decToHex[termObject.TColor], termObject.Width) 
         termObject.backColor[i] = string.rep(decToHex[termObject.BColor], termObject.Width) 
+        termObject.ots[i] = string.rep("X", termObject.Width)
+        termObject.otc[i] = string.rep(decToHex[termObject.BColor], termObject.Width) 
+        termObject.obc[i] = string.rep(decToHex[termObject.TColor], termObject.Width) 
     end
 
     local terminalFunctions = {
@@ -64,25 +61,28 @@ function Buffer.createBuffer(x, y, width, height, termIsColor)
         setBackgroundColor = function(termObject, color) if colorIsValid(color, termObject.TermIsColor) then termObject.BColor = color end end,
 
         drawScreen = function(termObject, x, y, w, h)
-            if termObject.CursorBlink then nativeTerm.setCursorBlink(false) end
-            local currentTColor, currentBColor = termObject.TColor, termObject.BColor
-
+            local currentTColor, currentBColor, changePosition = termObject.TColor, termObject.BColor, false
+            nativeTerm.setCursorBlink(false) 
             for y = 1, termObject.Height do
-                nativeTerm.setCursorPos(1 + termObject.OffsetX, y + termObject.OffsetY)
+                if not changePosition then nativeTerm.setCursorPos(1 + termObject.OffsetX, y + termObject.OffsetY) end
                 for x = 1, termObject.Width do
-                    local text = getColorOf(string.sub(termObject.textColor[y], x, x)) or termObject.TColor
-                    local back = getColorOf(string.sub(termObject.backColor[y], x, x)) or termObject.BColor
-                    local char = string.sub(termObject.textScreen[y], x, x) or " "
-                    if back ~= currentBColor then nativeTerm.setBackgroundColor(back); currentBColor = back end
-                    if char ~= " " and text ~= currentTColor then nativeTerm.setTextColor(text); currentTColor = text end
-                    nativeTerm.write(char)
+                    if string.sub(termObject.textColor[y], x, x) == string.sub(termObject.otc[y], x, x) and string.sub(termObject.backColor[y], x, x) == string.sub(termObject.obc[y], x, x) and string.sub(termObject.textScreen[y], x, x) == string.sub(termObject.ots[y], x, x) then
+                        changePosition = true
+                    else
+                        if changePosition then nativeTerm.setCursorPos(termObject.OffsetX + x, y + termObject.OffsetY); changePosition = false end
+                        nativeTerm.setBackgroundColor(getColorOf(string.sub(termObject.backColor[y], x, x)))
+                        nativeTerm.setTextColor(getColorOf(string.sub(termObject.textColor[y], x, x)))
+                        nativeTerm.write(string.sub(termObject.textScreen[y], x, x)) 
+                    end
                 end
             end
 
-            nativeTerm.setBackgroundColor(termObject.BColor)
-            nativeTerm.setTextColor(termObject.TColor)
-            nativeTerm.setCursorPos(termObject.CursorX, termObject.CursorY)
-            if termObject.CursorBlink then nativeTerm.setCursorBlink(true) end
+            nativeTerm.setBackgroundColor(termObject.BColor); nativeTerm.setTextColor(termObject.TColor)
+            if termObject.CursorBlink then nativeTerm.setCursorPos(termObject.CursorX, termObject.CursorY); nativeTerm.setCursorBlink(true) end
+
+            for y = 1, #termObject.textScreen do termObject.ots[y] = termObject.textScreen[y] end
+            for y = 1, #termObject.textColor do termObject.otc[y] = termObject.textColor[y] end
+            for y = 1, #termObject.backColor do termObject.obc[y] = termObject.backColor[y] end
         end
     }
 

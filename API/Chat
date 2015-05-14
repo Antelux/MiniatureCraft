@@ -10,10 +10,11 @@ local function addMessage(message, private)
 end
 
 function Chat.sendMessage(textMessage, playerName)
-  if type(textMessage) ~= "string" then return end; local args = {}
+  if type(textMessage) ~= "string" or textMessage == "" then return end; local args, stringIsBlank = {}--, true
+  --for i = 1, #textMessage do if string.sub(textMessage, i, i) ~= "" and string.sub(textMessage, i, i) ~= " " then stringIsBlank = false; break end end
   for output in string.gmatch(textMessage, "([^%s]+)") do args[#args + 1] = output end
 
-  if string.find(args[1], "/") then
+  if string.find(args[1], "/") and string.sub(args[1], 1, 1) == "/" then
     if args[1] == "/give" or args[1] == "/i" then 
       if not args[2] or not args[3] then addMessage(args[1].. " <player> <id> [amount]"); return end
       if not Player.isPlayer(args[2]) then addMessage("No such player " ..args[2]); return end
@@ -55,11 +56,32 @@ function Chat.sendMessage(textMessage, playerName)
     elseif args[1] == "/forcesave" then
       File.saveWorld(File.getCurrentWorldName()); addMessage("<Server> World saved")
 
+    elseif args[1] == "/spawn" then
+      local spawnPoint = Level.getSpawnPoint()
+      local currentPlayerX, currentPlayerY = Player.getCoordinates(playerName)
+      local differenceX, differenceY = spawnPoint[1] - currentPlayerX, spawnPoint[2] - currentPlayerY
+      local currentOffsetX, currentOffsetY = Level.getOffset()
+      Player.setCoordinates(playerName, spawnPoint[1], spawnPoint[2])
+      Level.setOffset(currentOffsetX + differenceX, currentOffsetY + differenceY)
+
+      addMessage("Teleporting to spawn point")
+
+    elseif args[1] == "/setspawn" then
+      local spawnPoint = {Player.getCoordinates(playerName)}
+      Level.setSpawnPoint(spawnPoint)
+      addMessage("Spawn set to X: " ..spawnPoint[1].. ", Y: " ..spawnPoint[2])
+
+    elseif args[1] == "/settime" then
+      if not args[2] then addMessage("/settime <time>"); return end
+      if type(tonumber(args[2])) ~= "number" then addMessage("<time> must be a number between 1 and 24!"); return end
+      Level.setTime(tonumber(args[2]))
+      addMessage("Time set to " ..textutils.formatTime(tonumber(args[2])))
+
     elseif args[1] == "/help" then
-      addMessage("/give, /gamemode, /whisper, /tp, /warp, /say, /forcesave")
+      addMessage("/give, /gamemode, /whisper, /tp, /warp, /say, /forcesave, /spawn, /setspawn, /settime")
 
     else addMessage("No such command") end
-  else addMessage("<" ..playerName.. "> " ..textMessage) end
+  elseif not stringIsBlank then addMessage("<" ..playerName.. "> " ..textMessage) end
 end
 
 function Chat.getMessages() return chatHistory end

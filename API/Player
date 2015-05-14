@@ -1,5 +1,3 @@
-_G.Player = {}
-
 local Assets = File.loadAssets()
 local currentPlayer = File.getCurrentPlayer()
 local playerData = {}
@@ -13,6 +11,8 @@ local function verifyPlayer(playerName, numberTable, stringTable, boolTable, tab
   if type(tableTable) == "table" then for i = 1, #tableTable do if type(tableTable[i]) ~= "table" then return false end end end
   return true
 end
+
+_G.Player = {}
 
 function Player.newPlayer(playerName, overrideTable)
   if type(playerName) == "string" and not playerData[playerName] then 
