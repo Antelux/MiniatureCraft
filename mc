@@ -31,6 +31,8 @@ local modem, port, ip
 local targetFPS = 20 -- Sets the target FPS you want the game to run at. Of course, anything above 20 wouldn't work, as 20 is the max always.
 local checkForUpdates = true
  
+local ok, err = loadfile(MainFolder.. "Assets")
+if not ok then error(err) end; pcall(ok)
 if checkForUpdates and http then
   local latestVersion = http.get("http://pastebin.com/raw.php?i=N2FmL2Q7")
   if latestVersion then
@@ -76,8 +78,6 @@ local function updateTimers()
   end
 end
 
-local ok, err = loadfile(MainFolder.. "Assets")
-if not ok then term.redirect(currentTerm); error(err) end; pcall(ok)
 local ok, err = loadfile(APIFolder.. "/File")
 if not ok then term.redirect(currentTerm); error(err) end; pcall(ok)
 for n, sFile in ipairs(fs.list(APIFolder)) do 
