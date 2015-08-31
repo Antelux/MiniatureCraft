@@ -1,8 +1,8 @@
-local MainFolder = getMainFolder()
+local MainFolder = shell.getRunningProgram():sub(1, #shell.getRunningProgram() - #fs.getName(shell.getRunningProgram()))
 local loadedMods, interactionBlocks, serverList = {}, {}, {}
 local Assets = File.getAssets()
 local parentMod 
-local levelName = "Default"
+local levelName = ""
 local ScreenWidth, ScreenHeight = Screen.getSize()
 
 local optionData = {
@@ -14,294 +14,9 @@ local optionData = {
 local fileDirectory = {"/API", "/Mods", "/Saves", "/Config"}
 for i = 1, #fileDirectory do if not fs.exists(MainFolder.. "" ..fileDirectory[i]) then fs.makeDir(MainFolder.. "" ..fileDirectory[i]) end end
 
-local function toBits(num, bits)
-  local bits, bin, cb = bits or 16, ""
-  for b = bits, 1, -1 do
-    cb = math.fmod(num, 2); bin, num = bin.. "" ..cb, (num - cb) / 2
-  end
-  return bin
-end
-
-local convert = {}; for i = 0, 15 do convert[#convert + 1] = 2 ^ i end
-local function toNumber(num)
-  local dec = 0
-  for i = 1, #num do
-    if string.sub(bin, i, i) == "1" then dec = dec + convert[i] end
-  end
-  return dec
-end
-
--- The functions "compressCoroutine," "decompressCoroutine," and "open" are pieces of a program called Package.
--- It was created by Jeffrey Alexander (aka Bomb Bloke), and I'm blown away by how much it reduced save sizes.
--- http://www.computercraft.info/forums2/index.php?/topic/21801-package-pastebin-uploader-downloader/
-local function compressCoroutine(ClearCode)
-  local startCodeSize = 1
-  while math.pow(2, startCodeSize) < ClearCode do startCodeSize = startCodeSize + 1 end
-  
-  local EOI, ClearCode = math.pow(2, startCodeSize) + 1, math.pow(2, startCodeSize)
-  startCodeSize = startCodeSize + 1
-  
-  local curbit, curbyte, outputlist, codes, CodeSize, MaxCode, nextcode, curcode, incode = 1, 0, {0}, {}, startCodeSize, math.pow(2, startCodeSize) - 1, EOI + 1, coroutine.yield()
-
-  local function packByte(num)
-    local mask = 1
-
-    for i = 1, CodeSize do
-      if bit.band(num, mask) == mask then curbyte = curbyte + curbit end
-      curbit, mask = curbit * 2, mask * 2
-
-      if curbit > 128 or (i == CodeSize and num == EOI) then
-        local counter = bit.blshift(bit.brshift(#outputlist - 1, 8), 8) + 1
-        outputlist[counter] = outputlist[counter] + 1
-
-        if outputlist[counter] > 255 then
-          outputlist[counter] = 255
-          outputlist[counter + 256] = 1
-        end
-
-        outputlist[#outputlist + 1] = curbyte
-        curbit, curbyte = 1, 0
-      end
-    end
-  end
-
-  packByte(ClearCode)
-
-  while true do
-    if #outputlist > 256 then
-      local keep = {}
-      for i = 257, #outputlist do
-        keep[#keep + 1] = outputlist[i]
-        outputlist[i] = nil
-      end
-      incode = coroutine.yield(unpack(outputlist))
-      outputlist = keep
-    else incode = coroutine.yield() end
-    
-    if not incode then
-      packByte(curcode)
-      packByte(EOI)
-      return unpack(outputlist)
-    end
-    
-    if not codes[curcode] then codes[curcode] = {} end
-
-    if not codes[curcode][incode] then
-      codes[curcode][incode] = nextcode
-      nextcode = nextcode + 1
-
-      packByte(curcode)
-
-      if nextcode == MaxCode + 2 then
-        CodeSize = CodeSize + 1
-        MaxCode = math.pow(2, CodeSize) - 1
-      end
-
-      if nextcode == 4095 then
-        packByte(ClearCode)
-        CodeSize, MaxCode, nextcode, codes = startCodeSize, math.pow(2, startCodeSize) - 1, EOI + 1, {}
-      end
-
-      curcode = incode
-    else curcode = codes[curcode][incode] end
-  end
-end
-
-local function decompressCoroutine(ClearCode)
-  local startCodeSize = 1
-  while math.pow(2, startCodeSize) < ClearCode do startCodeSize = startCodeSize + 1 end
-  
-  local EOI, ClearCode = math.pow(2, startCodeSize) + 1, math.pow(2, startCodeSize)
-  startCodeSize = startCodeSize + 1
-
-  local lastcounter = coroutine.yield()
-  local outputlist, bytenum, CodeSize, MaxCode, curbyte, maskbit, nextcode, codes, gotbytes = {}, 0, startCodeSize, math.pow(2, startCodeSize) - 1, coroutine.yield(), 1, EOI + 1, {}, 1
-  for i = 0, ClearCode - 1 do codes[i] = {[0] = i} end
-
-  while true do
-    local curcode, curbit = 0, 1
-
-    for i = 1, CodeSize do
-      if bit.band(curbyte, maskbit) == maskbit then curcode = curcode + curbit end
-      curbit, maskbit = curbit * 2, maskbit * 2
-
-      if maskbit > 128 then
-        maskbit, curbyte, gotbytes = 1, coroutine.yield(unpack(outputlist)), gotbytes + 1
-        outputlist = {}
-        
-        if gotbytes > lastcounter and curbyte then
-          lastcounter = curbyte
-          curbyte = coroutine.yield()
-          gotbytes = 1
-        end
-      end
-    end
-
-    if curcode == ClearCode then
-      CodeSize, MaxCode, nextcode, codes = startCodeSize, math.pow(2, startCodeSize) - 1, EOI + 1, {}
-      for i = 0, ClearCode - 1 do codes[i] = {[0] = i} end
-    elseif curcode ~= EOI then
-      if codes[nextcode - 1] then codes[nextcode - 1][#codes[nextcode - 1] + 1] = codes[curcode][0] else codes[nextcode - 1] = {[0] = codes[curcode][0]} end
-
-      if nextcode < 4096 then
-        codes[nextcode] = {}
-        for i = 0, #codes[curcode] do codes[nextcode][i] = codes[curcode][i] end
-        nextcode = nextcode + 1
-      end
-
-      if nextcode - 2 == MaxCode then
-        CodeSize = CodeSize + 1
-        MaxCode = math.pow(2, CodeSize) - 1
-      end
-
-      for i = 0, #codes[curcode] do outputlist[#outputlist + 1] = codes[curcode][i] end
-    else return unpack(outputlist) end
-  end
-end
-
-local function open(file, mode, valRange)
-  if (type(file) ~= "table" and type(file) ~= "string") or type(mode) ~= "string" then error("package.open: Expected: file (string or handle), mode (string). Got: " .. type(file) .. ", " .. type(mode) .. ".", 2) end
-
-  mode = mode:lower()
-  local binary, append, read, write, newhandle = mode:find("b") ~= nil, mode:sub(1, 1) == "a", mode:sub(1, 1) == "r", mode:sub(1, 1) == "w", {}
-
-  if not valRange then valRange = binary and 256 or 128 end
-  if type(valRange) ~= "number" or valRange < 2 or valRange > 256 then error("package.decompress: Value range must be a number between 2 - 256. Got: " .. valRange, 2) end
-
-  if not (append or write or read) then error("package.open: Invalid file mode: " .. mode, 2) end
-
-  if type(file) == "string" then
-    if append and fs.exists(file) then
-      local oldfile = open(file, "r" .. (binary and "b" or ""), valRange)
-      if not oldfile then return nil end
-
-      if binary then
-        local olddata = {}
-        for byte in oldfile.read do olddata[#olddata + 1] = byte end
-        oldfile.close()
-        newhandle = open(file, "wb", valRange)
-        for i = 1, #olddata do newhandle.write(olddata[i]) end
-      else
-        local olddata = oldfile.readAll()
-        oldfile.close()
-        newhandle = open(file, "w", valRange)
-        newhandle.write(olddata)
-      end
-
-      return newhandle
-    end
-
-    file = fs.open(file, mode:sub(1, 1) .. "b")
-    if not file then return nil end
-  else
-    if (write and (file.writeLine or not file.write)) or (read and not file.read) then error("package.open: Handle / mode mismatch.", 2) end
-
-    local tempfile, keys = {}, {}
-
-    for key, _ in pairs(file) do keys[#keys + 1] = key end
-    for i = 1, #keys do
-      tempfile[keys[i]] = file[keys[i]]
-      file[keys[i]] = nil
-    end
-
-    file = tempfile
-  end
-
-  if read then
-    local decompressCo, outputlist = coroutine.create(decompressCoroutine), {}
-    coroutine.resume(decompressCo, valRange)
-
-    local function getVal()
-      if #outputlist == 0 and coroutine.status(decompressCo) == "dead" then return nil end
-
-      while #outputlist == 0 and coroutine.status(decompressCo) ~= "dead" do
-        local fileRead = file.read()
-        if not fileRead then return nil end
-        local output = {coroutine.resume(decompressCo, fileRead)}
-        for j = #output, 2, -1  do outputlist[#outputlist + 1] = output[j] end
-      end
-
-      return table.remove(outputlist, #outputlist)
-    end
-
-    if binary then
-      newhandle.read = getVal
-    else
-      function newhandle.readLine()
-        local line = {}
-
-        repeat
-          local inVal = getVal()
-          if inVal then
-            line[#line + 1] = inVal
-          else
-            newhandle.readLine = function() return nil end
-            newhandle.readAll = newhandle.readLine
-            return #line > 0 and string.char(unpack(line)) or nil
-          end
-        until line[#line] == 10
-
-        line[#line] = nil
-        if line[#line] == 13 then line[#line] = nil end
-        return string.char(unpack(line))
-      end
-
-      function newhandle.readAll()
-        local lines = {}
-        for line in newhandle.readLine do lines[#lines + 1] = line end
-        return table.concat(lines, "\n")
-      end
-    end
-
-    function newhandle.extractHandle()
-      local keys = {}
-      for key, _ in pairs(newhandle) do keys[#keys + 1] = key end
-      for i = 1, #keys do newhandle[keys[i]] = nil end
-      return file
-    end
-  else
-    local compressCo = coroutine.create(compressCoroutine)
-    coroutine.resume(compressCo, valRange)
-
-    local function writeVal(inVal)
-      local output = {coroutine.resume(compressCo, inVal)}
-      for j = 2, #output do file.write(output[j]) end
-    end
-
-    if binary then
-      newhandle.write = writeVal
-    else
-      function newhandle.write(text)
-        for i = 1, #text do writeVal(text:byte(i)) end
-      end
-
-      function newhandle.writeLine(text)
-        newhandle.write(text .. "\n")
-      end
-    end
-
-    newhandle.flush = file.flush
-
-    function newhandle.extractHandle()
-      local output = {coroutine.resume(compressCo, false)}
-      for j = 2, #output do file.write(output[j]) end
-      local keys = {}
-      for key, _ in pairs(newhandle) do keys[#keys + 1] = key end
-      for i = 1, #keys do newhandle[keys[i]] = nil end
-      return file
-    end
-  end
-
-  function newhandle.close()
-    newhandle.extractHandle().close()
-  end
-
-  return newhandle
-end
-
 local function reloadOptions(wipe)
-  if not fs.exists(MainFolder.. "/options.data") or wipe then local options = open(MainFolder.. "/options.data", "w"); options.write(textutils.serialize(optionData)); options.close()
-  else local options = open(MainFolder.. "/options.data", "r"); optionData = textutils.unserialize(options.readAll()); options.close() end
+  if not fs.exists(MainFolder.. "/options.data") or wipe then local options = fs.open(MainFolder.. "/options.data", "w"); options.write(textutils.serialize(optionData)); options.close()
+  else local options = fs.open(MainFolder.. "/options.data", "r"); optionData = textutils.unserialize(options.readAll()); options.close() end
 end
 reloadOptions()
 
@@ -328,7 +43,7 @@ function File.runScript(script)
   local ok, error = pcall(function() loadedScript() end)
   if not ok and err and err ~= "" then
     local errorLog = fs.open(MainFolder.. "/log", "w")
-    errorLog.write(os.day().. ":" ..textutils.formatTime(os.time(), true).. ":" ..err)
+    errorLog.write(os.day().. ":" ..textutils.serialize(os.time()).. ":" ..err)
   end
 end
 
@@ -355,11 +70,6 @@ end
 function File.getLoadedMods() return loadedMods end
 
 -- Adds a mod to the game. Requires a table of information.
---------------------------------------------------------------------------------------------------------------------------------------
--- Turn this into File.addAssets()
--- And add a function called File.newMod() that is required to be ran at the start of a script.
--- It'll be like File.newMod(modName, authorName, description)
---------------------------------------------------------------------------------------------------------------------------------------
 function File.addMod(modTable) 
   loadedMods[#loadedMods + 1] = {
     ParentMod = parentMod or "Unknown",
@@ -370,51 +80,23 @@ function File.addMod(modTable)
     Generation = modTable.generation or modTable[5] or false
   }
 end
-
-local function getWhatsNeeded(table, type)
-  local newTable = {}
-  if type == "entity" then
-    for i in pairs(table) do
-      newTable[i] = {}
-      for k, v in pairs(table[i]) do
-        if k ~= "isTakingDamage" and k ~= "ai" then
-          newTable[i][k] = v
-        end
-      end
-    end
-  end
-
-  return textutils.serialize(newTable)
-end
-
-local function putWhatsNeeded(table, type)
-  local table = textutils.unserialize(table)
-  if type == "entity" then
-    for i in pairs(table) do
-      if table[i] then
-        Entity.spawnEntity(table[i].ID, table[i].dim, table[i].coordinates[1], table[i].coordinates[2], table[i])
-      end
-    end
-  end
-
-  return table
-end
  
 -- Save and load the storage table
 function File.saveWorld(worldName)
-  if type(worldName) ~= "string" then return end; local SavePath, currentWorld = File.getMainDirectory().. "/Saves/" ..worldName, Level.getWorld()
-  local worldData = {["Size"] = currentWorld["size"], ["Spawn"] = Level.getSpawnPoint(), ["Time"] = Level.getTime(), ["Seed"] = Level.getSeed(), ["SaveFormat"] = "OneByte 1.0", ["GameVersion"] = File.getVersion()} or {} -- Change to TwoByte 1.0 when ready
-  fs.delete(SavePath); fs.makeDir(SavePath); fs.makeDir(SavePath.. "/Dimension")
-  local Players = open(SavePath.. "/players.data", "w"); Players.write(textutils.serialize(Player.getPlayers() or {})); Players.close()
-  local Entities = open(SavePath.. "/entities.data", "w"); Entities.write(getWhatsNeeded(Entity.getEntities() or {}, "entity")); Entities.close()
-  local WorldData = open(SavePath.. "/world.data", "w"); WorldData.write(textutils.serialize(worldData)); WorldData.close()
+  if type(worldName) ~= "string" then return end
+  local SavePath, currentWorld = File.getMainDirectory().. "/Saves/" ..worldName, Level.getWorld()
+  local worldData = {["Size"] = currentWorld["size"], ["Spawn"] = Level.getSpawnPoint(), ["Time"] = Level.getTime()} or {}
+  fs.delete(SavePath.. "/Dimension"); fs.delete(SavePath.. "/players.data"); fs.makeDir(SavePath.. "/Dimension")
+  local Players = fs.open(SavePath.. "/players.data", "w"); Players.write(textutils.serialize(Player.getPlayers() or {})); Players.close()
+  local Entities = fs.open(SavePath.. "/entities.data", "w"); Entities.write(textutils.serialize(Entity.getEntities() or {})); Entities.close()
+  local WorldData = fs.open(SavePath.. "/world.data", "w"); WorldData.write(textutils.serialize(worldData)); WorldData.close()
   local StorageTable = {}
   for dimension in pairs(currentWorld) do
     if dimension ~= "size" then
-      local World = open(SavePath.. "/Dimension/" ..dimension, "wb") 
+      local World = fs.open(SavePath.. "/Dimension/" ..dimension, "wb") 
       for y = 1, currentWorld["size"][2] do
-        for x = 1, currentWorld["size"][1] do 
-          if currentWorld[dimension][x][y].Tile.ID and currentWorld[dimension][x][y].Tile.ID <= 255 then World.write(currentWorld[dimension][x][y].Tile.ID or 0) end
+        for x = 1, currentWorld["size"][1] do
+          if currentWorld[dimension][x][y].Tile.ID <= 255 then World.write(currentWorld[dimension][x][y].Tile.ID or 0) end
           if not currentWorld[dimension][x][y].Block.ID or currentWorld[dimension][x][y].Block.ID <= 255 then World.write(currentWorld[dimension][x][y].Block.ID or 0) end
           if currentWorld[dimension][x][y].Tile.storage and currentWorld[dimension][x][y].Tile.storage ~= {} then StorageTable[#StorageTable + 1] = {I = currentWorld[dimension][x][y].Tile.ID, D = dimension, X = x, Y = y, T = "T", S = currentWorld[dimension][x][y].Tile.storage} end
           if currentWorld[dimension][x][y].Block.storage and currentWorld[dimension][x][y].Block.storage ~= {} then StorageTable[#StorageTable + 1] = {I = currentWorld[dimension][x][y].Block.ID, D = dimension, X = x, Y = y, T = "B", S = currentWorld[dimension][x][y].Block.storage} end
@@ -424,7 +106,7 @@ function File.saveWorld(worldName)
       World.close()
     end
   end
-  local Storage = open(SavePath.. "/storage.data", "w"); Storage.write(textutils.serialize(StorageTable)); Storage.close()
+  local Storage = fs.open(SavePath.. "/storage.data", "w"); Storage.write(textutils.serialize(StorageTable)); Storage.close()
 end
 
 local function splitWorldString(str)
@@ -440,23 +122,22 @@ end
 
 function File.loadWorld(worldName)
   if type(worldName) ~= "string" then return end
-  local SavePath, Length, Width = File.getMainDirectory().. "/Saves/" ..worldName; if not fs.exists(SavePath) then return end
-  local Players = open(SavePath.. "/players.data", "r"); Player.setPlayers(textutils.unserialize(Players.readAll())); Players.close()
-  local Entities = open(SavePath.. "/entities.data", "r"); putWhatsNeeded(Entities.readAll(), "entity"); Entities.close()
-  local WorldData = open(SavePath.. "/world.data", "r"); local Data = textutils.unserialize(WorldData.readAll()) WorldData.close()
-  local Storage = open(SavePath.. "/storage.data", "r"); local StorageTable = textutils.unserialize(Storage.readAll()) Storage.close()
-  local Length, Width = Data["Size"][1], Data["Size"][2]; Level.setSpawnPoint(Data["Spawn"]); Level.setTime(Data["Time"]); Level.setSeed(Data["Seed"])
+  local SavePath, Length, Width = File.getMainDirectory().. "/Saves/" ..worldName
+  if not fs.exists(SavePath) then return end
+  local Players = fs.open(SavePath.. "/players.data", "r"); Player.setPlayers(textutils.unserialize(Players.readAll())); Players.close()
+  local Entities = fs.open(SavePath.. "/entities.data", "r"); Entity.setEntities(textutils.unserialize(Entities.readAll())); Entities.close()
+  local WorldData = fs.open(SavePath.. "/world.data", "r"); local Data = textutils.unserialize(WorldData.readAll()) WorldData.close()
+  local Storage = fs.open(SavePath.. "/storage.data", "r"); local StorageTable = textutils.unserialize(Storage.readAll()) Storage.close()
+  local Length, Width = Data["Size"][1], Data["Size"][2]; Level.setSpawnPoint(Data["Spawn"]); Level.setTime(Data["Time"]) 
   local Dimensions = fs.list(SavePath.. "/Dimension/"); table.sort(Dimensions, function(a, b) return a > b end)
   Level.worldBase(Length, Width, Dimensions[3], Dimensions[1])
-  Screen.setBackgroundColor(colors.black); Screen.setTextColor(colors.white); Screen.clear(); Screen.setCursorPos(1, 1)
   for _, dimension in ipairs(Dimensions) do
-    print("Opening " ..dimension.. "...")
-    local World = open(SavePath.. "/Dimension/" ..dimension, "rb")
+    local World = fs.open(SavePath.. "/Dimension/" ..dimension, "rb")
     for y = 1, Length do
       for x = 1, Width do
         local tile = World.read(); local block = World.read()
-        if tile == 0 then tile = false end; if block == 0 then block = false end
-        Level.setData(tonumber(dimension), x, y, {Tile = {ID = tile}, Block = {ID = block}})
+        if tile and tile ~= 0 then Level.setData(tonumber(dimension), x, y, {Tile = {ID = tile}}) end
+        if block and block ~= 0 then Level.setData(tonumber(dimension), x, y, {Block = {ID = block}}) end
       end
     end
     World.close()
@@ -466,7 +147,8 @@ function File.loadWorld(worldName)
     if StorageTable[i].T == "T" then Level.setData(StorageTable[i].D, StorageTable[i].X, StorageTable[i].Y, {Tile = {ID = StorageTable[i].I, storage = StorageTable[i].S}}) end
     if StorageTable[i].T == "B" then Level.setData(StorageTable[i].D, StorageTable[i].X, StorageTable[i].Y, {Block = {ID = StorageTable[i].I, storage = StorageTable[i].S}}) end
   end
-  local newWorld = Level.getWorld(); newWorld["size"] = {Length, Width}
+  local newWorld = Level.getWorld()
+  newWorld["size"] = {Length, Width}
   Level.setWorld(newWorld); levelName = worldName
   if Level.isSingleplayer() then
     Player.setName(Player.getNames()[1], optionData.playerName)
