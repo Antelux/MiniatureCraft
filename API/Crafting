@@ -1,7 +1,6 @@
-local craftingTables = {}
-
 _G.Crafting = {}
 
+local craftingTables = {}
 function Crafting.setCraftingTable(id, name, x, y, w, h) 
   craftingTables[#craftingTables + 1] = {Name = name, ID = id, Recipes = {}, Size = {x, y, w, h}} 
 end
@@ -12,13 +11,20 @@ function Crafting.isCraftingTable(id)
   for i = 1, #craftingTables do if craftingTables[i].ID == id then return i end end
 end
 
+function Crafting.playerCanCraft(player, id, amount)
+
+end
+
+function Crafting.playerCraft(player, id, amount)
+
+end
+
 function Crafting.setRecipe(id, output, outputAmount, input)
-  local craftingTables = Crafting.getCraftingTables()
-  local tableID = Crafting.isCraftingTable(id)
+  local craftingTables, tableID = Crafting.getCraftingTables(), Crafting.isCraftingTable(id)
   if tableID then craftingTables[tableID].Recipes[#craftingTables[tableID].Recipes + 1] = {Input = input, Output = {output, outputAmount}} end
 end
 
---[Crafting Table]-- (Disabled recipes are items that cannot be used at the moment.)
+--[Crafting Table]-- (Disabled recipes are usually blocks/items that cannot be used at the moment.)
 Crafting.setCraftingTable(13, "CRAFTING", 2, 4, 18, 14)
 
 -- Tools
@@ -37,10 +43,11 @@ Crafting.setRecipe(13, 109, 1, {1, 2, 226, 2}) -- Stone Hoe
 -- Crafting.setRecipe(13, 151, 1, {226, 3, 242, 3}) -- Bow
 
 -- Blocks
-Crafting.setRecipe(13, 13, 1, {2, 4}) -- Crafting Table
+Crafting.setRecipe(13, 13, 1, {68, 4}) -- Crafting Table
 Crafting.setRecipe(13, 14, 1, {1, 8}) -- Furnace
 Crafting.setRecipe(13, 20, 1, {1, 8}) -- Oven
-Crafting.setRecipe(13, 19, 1, {238, 3, 216, 4}) -- Anvil
+Crafting.setRecipe(13, 19, 1, {16, 3, 216, 4}) -- Anvil
+Crafting.setRecipe(13, 34, 1, {68, 6}) -- Door
 
 -- Light Sources
 Crafting.setRecipe(13, 22, 1, {220, 4, 216, 2, 29, 1}) -- Lantern

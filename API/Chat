@@ -1,107 +1,269 @@
 _G.Chat = {}
+local Assets = File.getAssets()
 local chatHistory = {}
 local ScreenWidth, ScreenHeight = Screen.getSize()
+local colorCodes = {
+  ["0"] = colors.black,
+  ["1"] = colors.blue,
+  ["2"] = colors.green,
+  ["3"] = colors.cyan,
+  ["4"] = colors.red,
+  ["5"] = colors.purple,  
+  ["6"] = colors.orange,
+  ["7"] = colors.lightGray,
+  ["8"] = colors.gray,
+  ["9"] = colors.magenta,
+  ["a"] = colors.lime,
+  ["b"] = colors.lightBlue,
+  ["c"] = colors.brown,
+  ["d"] = colors.pink,
+  ["e"] = colors.yellow,
+  ["f"] = colors.white
+}
 
-local function addMessage(message, private) 
-  local wrap = #message / math.floor(ScreenWidth / 2)
+local convertToColorCode = {
+  [colors.black] = "0",
+  [colors.blue] = "1",
+  [colors.green] = "2",
+  [colors.cyan] = "3",
+  [colors.red] = "4",
+  [colors.purple] = "5",  
+  [colors.orange] = "6",
+  [colors.lightGray] = "7",
+  [colors.gray] = "8",
+  [colors.magenta] = "9",
+  [colors.lime] = "a",
+  [colors.lightBlue] = "b",
+  [colors.brown] = "c",
+  [colors.pink] = "d",
+  [colors.yellow] = "e",
+  [colors.white] = "f"
+}
 
-  if wrap <= 1 then chatHistory[#chatHistory + 1] = {message, private or false} 
-  else for i = 1, math.ceil(wrap) do chatHistory[#chatHistory + 1] = {string.sub(message, (math.floor(ScreenWidth / 2) * i) - math.floor(ScreenWidth / 2), math.floor(ScreenWidth / 2) * i - 1), private or false} end end
+function Chat.convertToColorCode(color) if convertToColorCode[color] then return "&" ..convertToColorCode[color] end end
+function Chat.getColor(code) if colorCodes[code] then return colorCodes[code] end end
+function Chat.writeInColor(message, x, y)
+  if x and y then Screen.setCursorPos(x, y) end
+  if not string.find(message, "&") then Screen.write(message); return end
+
+  local msg = {}
+  for output in string.gmatch(message, "([^%s]+)") do msg[#msg + 1] = output end
+  for i = 1, #msg do
+    local tString = msg[i]
+    for x = 1, #tString do
+      if string.sub(tString, x, x) == "&" then
+        local code = string.lower(string.sub(tString, x + 1, x + 1))
+        if colorCodes[code] then Screen.setTextColor(colorCodes[code]) 
+        --if msg[i + 1] then msg[i + 1] = "&" ..code.. "" ..msg[i + 1] end
+        tString = string.sub(tString, 1, x - 1).. "" ..string.sub(tString, x + 1); x = x - 1
+        else Screen.write(string.sub(tString, x, x)) end
+      else Screen.write(string.sub(tString, x, x)) end
+    end
+    if i ~= #msg then Screen.write(" ") end
+  end
 end
 
+local function addMessage(message, private) 
+  local msg, lineX, lineLimit = {}, 1, math.ceil(ScreenWidth / 2)
+  for output in string.gmatch(message, "([^%s]+)") do msg[#msg + 1] = output end
+  for i = 1, #msg do if i ~= #msg then msg[i] = msg[i].. " " end end
+  local outputMessage, currentLine = {}, 1
+  for i = 1, #msg do
+    if lineX + #msg[i] <= lineLimit then
+      lineX = lineX + #msg[i]
+      outputMessage[currentLine] = (outputMessage[currentLine] or "").. "" ..msg[i]
+    --elseif lineX + #msg[i] <= lineLimit + 1 then
+    --  lineX = lineX + #msg[i]
+    --  outputMessage[currentLine] = (outputMessage[currentLine] or "").. "" ..string.sub(msg[i], 1, #msg[i] - 1)
+    else
+      lineX, currentLine = 0, currentLine + 1
+
+      -- fix this part for the long strings
+      if lineX + #msg[i] <= lineLimit then
+        lineX = lineX + #msg[i]
+        outputMessage[currentLine] = (outputMessage[currentLine] or "").. "" ..msg[i]
+      else
+        outputMessage[currentLine] = msg[i - 1].. " " ..string.sub(msg[i], 1, lineLimit - #msg[i - 1] - 1)
+        for i = 2, math.ceil(#msg[i] / math.floor(lineLimit)) do 
+          currentLine = currentLine + 1
+          outputMessage[currentLine] = string.sub(msg[i], lineLimit * 2, lineLimit * 3)
+        end
+      end 
+    end
+  end
+  for i = 1, #outputMessage do chatHistory[#chatHistory + 1] = {outputMessage[i], private or false} end
+end
+
+local chatFunctions = {
+  ["/give"] = function(args, playerName)
+    if not args[2] or not args[3] then addMessage("&7" ..args[1].. " <player> <id> [amount]"); return end
+    if not Player.isPlayer(args[2]) then addMessage("&7No such player " ..args[2]); return end
+    local itemID = tonumber(args[3])
+    if type(itemID) ~= "number" then 
+      if type(tostring(args[3])) ~= "string" then addMessage("&7<id> must be a numerical id or name of an asset"); return end
+      itemID = Level.convertID(args[3])
+    end
+    if not itemID or not Assets[itemID] then addMessage("&7No such asset with id " ..itemID); return end
+    local amount = tonumber(args[4]) or (Assets[tonumber(args[3])] and Assets[tonumber(args[3])].maxStack) or 99
+    if type(amount) ~= "number" then addMessage("&7[amount] must be a number"); return end
+    Player.giveItem(args[2], itemID, amount)
+    addMessage("&7Gave " ..amount.. " " ..Level.convertID(itemID).. " to " ..args[2])
+  end,
+
+  ["/gamemode"] = function(args, playerName)
+    local player = args[3] or playerName
+    if not args[2] then addMessage("&7" ..args[1].. " <mode> [player]"); return end
+    if not Player.isPlayer(player) then addMessage("&7No such player " ..player); return end
+    if type(tonumber(args[2])) ~= "number" and args[2] ~= "s" and args[2] ~= "survival" and args[2] ~= "c" and args[2] ~= "creative" then addMessage("&7No such gamemode " ..args[2]); return end
+    if args[2] == "s" or args[2] == "survival" then args[2] = "0" elseif args[2] == "c" or args[2] == "creative" then args[2] = "1" end
+    Player.setMode(player, tonumber(args[2]))
+    if args[2] == "0" then args[2] = "survival" elseif args[2] == "1" then args[2] = "creative" end
+    addMessage("<&4Server&f> Set " ..player.. "'s gamemode to " ..args[2])
+  end,
+
+  ["/whisper"] = function(args, playerName)
+    if not args[2] or not args[3] then addMessage("&7" ..args[1].. " <player> <message>"); return end
+    if not Player.isPlayer(args[2]) then addMessage("&7No such player " ..args[2]); return end
+  end,
+
+  ["/tp"] = function(args, playerName)
+    if not args[2] or not args[3] or not args[4] then addMessage("&7/tp <player> <x> <y>"); return end
+    if not Player.isPlayer(args[2]) then addMessage("&7No such player " ..args[2]); return end
+    local tpx, tpy = tonumber(args[3]), tonumber(args[4]); local maxX, maxY = Level.getSize()
+    if type(tpx) ~= "number" or type(tpy) ~= "number" then addMessage("&7<x> and <y> must be number values!"); return end
+    if tpx < 1 or tpy < 1 or tpx > maxX or tpy > maxY then addMessage("&7Given coordinates are out of range."); return end
+
+    local currentPlayerX, currentPlayerY = Player.getCoordinates(args[2])
+    local differenceX, differenceY = args[3] - currentPlayerX, args[4] - currentPlayerY
+    local currentOffsetX, currentOffsetY = Level.getOffset()
+    Player.setCoordinates(args[2], tonumber(args[3]), tonumber(args[4]))
+    Level.setOffset(currentOffsetX + differenceX, currentOffsetY + differenceY)
+    addMessage("<&4Server&f> Teleported " ..args[2].. " to " ..args[3].. ", " ..args[4])
+  end,
+
+  ["/warp"] = function(args, playerName)
+    if not args[2] or not args[3] then addMessage("&7/warp <player> <dimension>"); return end
+    if not Player.isPlayer(args[2]) then addMessage("&7No such player " ..args[2]); return end
+    Player.setDimension(args[2], tonumber(args[3]))
+    addMessage("<&4Server&f> Warped " ..args[2].. " to level " ..args[3])
+  end,
+
+  ["/say"] = function(args, playerName)
+    local tString = ""
+    for i = 1, #args - 1 do tString = tString.. " " ..args[i + 1] end
+    addMessage("<&4Server&f> " ..tString)
+  end,
+
+  ["/save"] = function(args, playerName)
+    File.saveWorld(File.getCurrentWorldName()); addMessage("<&4Server&f> World Saved")
+  end,
+
+  ["/spawn"] = function(args, playerName)
+    local spawnPoint = Level.getSpawnPoint()
+    local currentPlayerX, currentPlayerY = Player.getCoordinates(playerName)
+    local differenceX, differenceY = spawnPoint[1] - currentPlayerX, spawnPoint[2] - currentPlayerY
+    local currentOffsetX, currentOffsetY = Level.getOffset()
+    Player.setCoordinates(playerName, spawnPoint[1], spawnPoint[2])
+    Level.setOffset(currentOffsetX + differenceX, currentOffsetY + differenceY)
+    addMessage("&7Teleporting to spawn point")
+  end,
+
+  ["/setspawn"] = function(args, playerName)
+    local spawnPoint = {Player.getCoordinates(playerName)}
+    Level.setSpawnPoint(spawnPoint)
+    addMessage("&7Spawn set to X: " ..spawnPoint[1].. ", Y: " ..spawnPoint[2])
+  end,
+
+  ["/time"] = function(args, playerName)
+    local keyTimes = {["dawn"] = 6, ["sunrise"] = 6.4, ["day"] = 8, ["noon"] = 12, ["afternoon"] = 16, ["evening"] = 18, ["sunset"] = 19.4, ["night"] = 20, ["dusk"] = 20, ["midnight"] = 24}
+    if (not args[2] or not args[3]) or args[2] ~= "set" then addMessage("&7/time set <time>"); return end
+    if keyTimes[args[3]] then Level.setTime(keyTimes[args[3]]); addMessage("<&4Server&f> Time set to " ..textutils.formatTime(keyTimes[args[3]])); return end
+    if type(tonumber(args[3])) ~= "number" then addMessage("&7<time> must be a number between 0 and 24!"); return end
+    if tonumber(args[3]) < 0 or tonumber(args[3]) > 24 then addMessage("&7<time> must be a number between 0 and 24!"); return end
+    Level.setTime(tonumber(args[3])); addMessage("<&4Server&f> Time set to " ..textutils.formatTime(tonumber(args[3])))
+  end,
+
+  ["/heal"] = function(args, playerName)
+    local player = args[2] or playerName
+    if not Player.isPlayer(player) then addMessage("&7No such player " ..tostring(player)); return end
+    Player.setHealth(player, 20)
+    addMessage("&7Fully healed " ..player)
+  end,
+
+  ["/kill"] = function(args, playerName)
+    local player = args[2] or playerName
+    if not Player.isPlayer(player) then addMessage("&7No such player " ..tostring(player)); return end
+    Player.setHealth(player, 0)
+    addMessage("&7Killed " ..player)
+  end,
+
+  ["/run"] = function(args, playerName)
+    addMessage("&7Running code."); table.remove(args, 1)
+    assert(loadstring(table.concat(args, " ")))()
+  end,
+
+  ["/help"] = function(args, playerName)
+    if Level.isSingleplayer() then addMessage("&e/give, /gamemode, /whisper, /tp, /warp, /say, /save, /spawn, /setspawn, /time, /heal, /kill, /seed") else
+    addMessage("&e/give, /gamemode, /whisper, /tp, /warp, /say, /save, /spawn, /setspawn, /time, /heal, /kill, /seed, /kick, /ban, /unban, /op, /stop, /restart") end
+  end,
+
+  -- Server related commands
+  ["/kick"] = function(args, playerName)
+
+  end,
+
+  ["/ban"] = function(args, playerName)
+
+  end,
+
+  ["/unban"] = function(args, playerName)
+
+  end,
+
+  ["/op"] = function(args, playerName)
+
+  end,
+
+  ["/stop"] = function(args, playerName)
+
+  end,
+
+  ["/restart"] = function(args, playerName)
+
+  end,
+
+  ["/seed"] = function(args, playerName)
+    --[[
+    local seed, convertedSeed, n = tostring(Level.getSeed()), "", ""
+    for i = 1, #seed do
+      local cl = string.sub(seed, i, i)
+      if type(tonumber(cl)) == "number" then
+        n = n.. "" ..cl
+        if #n == 2 then convertedSeed = convertedSeed.. "" ..string.char(tonumber(n)); n = "" end
+        if i == #seed then convertedSeed = convertedSeed.. "" ..n end
+      else 
+        if #n == 1 then convertedSeed = convertedSeed.. "" ..n; n = "" end
+        convertedSeed = convertedSeed.. "" ..cl 
+      end
+    end
+    --]]
+    addMessage("&7World seed: " ..tostring(Level.getSeed()))
+  end
+}
+
+chatFunctions["/i"] = chatFunctions["/give"]
+chatFunctions["/gm"] = chatFunctions["/gamemode"]
+chatFunctions["/w"] = chatFunctions["/whisper"]
+
 function Chat.sendMessage(textMessage, playerName)
-  if type(textMessage) ~= "string" or textMessage == "" then return end; local args, stringIsBlank = {}--, true
-  --for i = 1, #textMessage do if string.sub(textMessage, i, i) ~= "" and string.sub(textMessage, i, i) ~= " " then stringIsBlank = false; break end end
+  local textMessage = textMessage or ""
+  if type(textMessage) ~= "string" or textMessage == "" then return end; local args, stringIsBlank = {}
   for output in string.gmatch(textMessage, "([^%s]+)") do args[#args + 1] = output end
 
-  if string.find(args[1], "/") and string.sub(args[1], 1, 1) == "/" then
-    if args[1] == "/give" or args[1] == "/i" then 
-      if not args[2] or not args[3] then addMessage(args[1].. " <player> <id> [amount]"); return end
-      if not Player.isPlayer(args[2]) then addMessage("No such player " ..args[2]); return end
-      Player.giveItem(args[2], tonumber(args[3]), tonumber(args[4]) or 1)
-      addMessage("<Server> Gave " ..(args[4] or 1).. " " ..Level.convertID(tonumber(args[3])).. " to " ..args[2])
-
-    elseif args[1] == "/gamemode" or args[1] == "/gm" then 
-      if not args[2] or not args[3] then addMessage(args[1].. " <player> <mode>"); return end
-      if not Player.isPlayer(args[2]) then addMessage("No such player " ..args[2]); return end
-      Player.setMode(args[2], tonumber(args[3]))
-      if args[3] == "0" then args[3] = "survival" elseif args[3] == "1" then args[3] = "creative" else args[3] = "?" end
-      addMessage("<Server> Set " ..args[2].. "'s gamemode to " ..args[3])
-
-    elseif args[1] == "/whisper" or args[1] == "/w" then
-      if not args[2] or not args[3] then addMessage(args[1].. " <player> <message>"); return end
-      if not Player.isPlayer(args[2]) then addMessage("No such player " ..args[2]); return end
-
-    elseif args[1] == "/tp" then 
-      if not args[2] or not args[3] or not args[4] then addMessage("/tp <player> <x> <y>"); return end
-      if not Player.isPlayer(args[2]) then addMessage("No such player " ..args[2]); return end
-      local currentPlayerX, currentPlayerY = Player.getCoordinates(args[2])
-      local differenceX, differenceY = args[3] - currentPlayerX, args[4] - currentPlayerY
-      local currentOffsetX, currentOffsetY = Level.getOffset()
-      Player.setCoordinates(args[2], tonumber(args[3]), tonumber(args[4]))
-      Level.setOffset(currentOffsetX + differenceX, currentOffsetY + differenceY)
-      addMessage("<Server> Teleported " ..args[2].. " to " ..args[3].. ", " ..args[4])
-
-    elseif args[1] == "/warp" then
-      if not args[2] or not args[3] then addMessage("/warp <player> <dimension>"); return end
-      if not Player.isPlayer(args[2]) then addMessage("No such player " ..args[2]); return end
-      Player.setDimension(args[2], tonumber(args[3]))
-      addMessage("<Server> Warped " ..args[2].. " to level " ..args[3])
-
-    elseif args[1] == "/say" then
-      local tString = ""
-      for i = 1, #args - 1 do tString = tString.. " " ..args[i + 1] end
-      addMessage("<Server> " ..tString)
-
-    elseif args[1] == "/forcesave" then
-      File.saveWorld(File.getCurrentWorldName()); addMessage("<Server> World saved")
-
-    elseif args[1] == "/spawn" then
-      local spawnPoint = Level.getSpawnPoint()
-      local currentPlayerX, currentPlayerY = Player.getCoordinates(playerName)
-      local differenceX, differenceY = spawnPoint[1] - currentPlayerX, spawnPoint[2] - currentPlayerY
-      local currentOffsetX, currentOffsetY = Level.getOffset()
-      Player.setCoordinates(playerName, spawnPoint[1], spawnPoint[2])
-      Level.setOffset(currentOffsetX + differenceX, currentOffsetY + differenceY)
-
-      addMessage("Teleporting to spawn point")
-
-    elseif args[1] == "/setspawn" then
-      local spawnPoint = {Player.getCoordinates(playerName)}
-      Level.setSpawnPoint(spawnPoint)
-      addMessage("Spawn set to X: " ..spawnPoint[1].. ", Y: " ..spawnPoint[2])
-
-    elseif args[1] == "/settime" then
-      if not args[2] then addMessage("/settime <time>"); return end
-      if type(tonumber(args[2])) ~= "number" then addMessage("<time> must be a number between 1 and 24!"); return end
-      Level.setTime(tonumber(args[2]))
-      addMessage("Time set to " ..textutils.formatTime(tonumber(args[2])))
-
-    elseif args[1] == "/help" then
-      addMessage("/give, /gamemode, /whisper, /tp, /warp, /say, /forcesave, /spawn, /setspawn, /settime")
-
-    else addMessage("No such command") end
-  elseif not stringIsBlank then addMessage("<" ..playerName.. "> " ..textMessage) end
+  if args[1] and string.find(args[1], "/") and string.sub(args[1], 1, 1) == "/" then
+    if chatFunctions[args[1]] then chatFunctions[args[1]](args, playerName) else addMessage("&7No such command") end
+  elseif not stringIsBlank then addMessage("&f<" ..playerName.. "&f> " ..textMessage) end
 end
 
 function Chat.getMessages() return chatHistory end
 function Chat.setMessages(newMessages) if type(newMessages) == "table" then chatHistory = newMessages end end
-
---[[
-&0   colors.black
-&1   colors.blue
-&2   colors.green
-&3   colors.cyan
-&4   colors.red
-&5   colors.purple  
-&6   colors.orange
-&7   colors.lightGray
-&8   colors.gray
-&9   colors.magenta
-&A   colors.lime
-&B   colors.lightBlue
-&C   colors.brown
-&D   colors.pink
-&E   colors.yellow
-&F   colors.white
---]]

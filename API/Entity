@@ -4,8 +4,7 @@ local entityData = {}
 _G.Entity = {}
 
 local function verifyEntity(entityID, numberTable, stringTable, boolTable, tableTable)
-  if type(entityID) ~= "number" then return end 
-  if not entityData[entityID] then return end
+  if type(entityID) ~= "number" or not entityData[entityID] then return end 
   if type(numberTable) == "table" then for i = 1, #numberTable do if type(numberTable[i]) ~= "number" then return end end end
   if type(stringTable) == "table" then for i = 1, #stringTable do if type(stringTable[i]) ~= "string" then return end end end
   if type(boolTable) == "table" then for i = 1, #boolTable do if type(boolTable[i]) ~= "boolean" then return end end end
@@ -21,38 +20,55 @@ end
 
 function Entity.getEntities() Entity.updateEntities(); return entityData end
 function Entity.setEntities(newEntityData) if type(newEntityData) == "table" then entityData = newEntityData; Entity.updateEntities() end end
+function Entity.getTotal()
+  local e = 0
+  for i in pairs(entityData) do
+    e = e + (entityData[i] and 1) or 0
+  end
+  return e
+end
 
 function Entity.spawnEntity(entityid, dimension, x, y, overrideTable)
-  if type(entityid) ~= "number" or type(dimension) ~= "number" or type(x) ~= "number" or type(y) ~= "number" then return end
+  if type(entityid) ~= "number" or not Assets[entityid] or type(dimension) ~= "number" or type(x) ~= "number" or type(y) ~= "number" then return end
   local newEntity = #entityData + 1
   entityData[newEntity] = {
-    currentDim = dimension,
+    dim = dimension,
     coordinates = {x, y},
     ID = entityid,
-    direction = math.random(4)
+    dir = math.random(4),
+    health = Assets[entityid].health or -1,
+    heldItem = Assets[entityid].weapon or false,
+    damage = Assets[Assets[entityid].weapon or 1].damage or 1,
+    speed = Assets[entityid].speed or 5,
+    isTakingDamage = false,
+    ai = coroutine.create(function(i) Assets[entityid].script(i) end)
   }
 
-  for k, v in pairs(Assets[entityid]) do entityData[newEntity][k] = v end
-  if overrideTable then for k, v in pairs(overrideTable) do entityData[newEntity][k] = v end end
-
+  coroutine.resume(entityData[newEntity].ai, newEntity)
+  --for k, v in pairs(Assets[entityid]) do entityData[newEntity][k] = v end
+  if type(overrideTable) == "table" then for k, v in pairs(overrideTable) do entityData[newEntity][k] = v end end
   Entity.updateEntities()
 end
 
 function Entity.removeEntity(entityid)
   if not verifyEntity(entityid) then return end
   for i = 1, #entityData do
-    if entityData[i] and entityData[i].ID == entityid then table.remove{entityData, i}; break end
+    if entityData[i] and entityData[i].ID == entityid then entityData[i] = nil; break end
   end
   Entity.updateEntities()
 end
 
 function Entity.setDirection(entityid, newDirection) if verifyEntity(entityid, {newDirection}) and (newDirection >= 1 or newDirection <= 4) then entityData[entityid].direction = newDirection end end
 function Entity.getDirection(entityid) if verifyEntity(entityid) then return entityData[entityid].direction end end
-function Entity.setHealth(entityid, healthAmount) if verifyEntity(entityid {healthAmount}) then entityData[entityid].Health = healthAmount end end
+function Entity.setHealth(entityid, healthAmount) if verifyEntity(entityid {healthAmount}) then entityData[entityid].health = healthAmount end end
 function Entity.getHealth(entityid) if verifyEntity(entityid) then return entityData[entityid].health end end
+function Entity.setSpeed(entityid, speedAmount) if verifyEntity(entityid {speedAmount}) then entityData[entityid].speed = speedAmount end end
+function Entity.getSpeed(entityid) if verifyEntity(entityid) then return entityData[entityid].speed end end
+function Entity.setDamage(entityid, damageAmount) if verifyEntity(entityid {damageAmount}) then entityData[entityid].damage = damageAmount end end
+function Entity.getDamage(entityid) if verifyEntity(entityid) then return entityData[entityid].damage end end
 
 function Entity.setCoordinates(entityid, x, y)
-  if not verifyEntity(entityid, {x, y}) then return end
+  if not verifyEntity(entityid) then return end
 
   if type(x) == "string" then
     if string.find(x, "add") then entityData[entityid].coordinates[1] = entityData[entityid].coordinates[1] + (tonumber(x:sub(4)) or 0) end
@@ -70,6 +86,7 @@ function Entity.setDimension(entityid, dimension) if verifyEntity(entityid, {dim
 function Entity.getDimension(entityid) if verifyEntity(entityid) then return entityData[entityid].currentDim end end
 function Entity.equipItem(entityid, itemid) if verifyEntity(entityid, {itemid}) and Assets[itemid] then entityData[entityid].heldItem = itemid end end
 function Entity.getHeldItem(entityid) if verifyEntity(entityid) then return entityData[entityid].heldItem end end
+function Entity.isTakingDamage(entityid) if verifyEntity(entityid) then return entityData[entityid].isTakingDamage end end
 
 function Entity.move(entityid, moveAmount, checkCollision)
   if not verifyEntity(entityid, {moveAmount}, _, {checkCollision}) then return end
@@ -82,11 +99,113 @@ function Entity.move(entityid, moveAmount, checkCollision)
   elseif currentDirection == 3 then newPositionY = newPositionY + moveAmount
   else newPositionX = newPositionX - moveAmount end
 
-  if checkCollision and Level.checkForCollision(entityData[entityid].currentDim, newPositionX, newPositionY, {51, 61}) then return end
+  if checkCollision and Level.checkForCollision(entityData[entityid].dim, newPositionX, newPositionY, {51, 61}) then return end
   if newPositionX < 1 or newPositionX > width or newPositionY < 1 or newPositionY > height then return end
-  entityData[entityid].coordinates = {newPositionX, newPositionY}
+  entityData[entityid].coordinates = {newPositionX, newPositionY}; return true
+end
+
+local function blockExists(dim, x, y)
+  local data = Level.getData(dim, x, y)
+  if data and data.Block and data.Block.ID then return true end
+end
+
+-- Totally not an edited version of the paintutils.drawLine() function.
+local abs, floor, min, sqrt = math.abs, math.floor, math.min, math.sqrt
+function Entity.canSeePlayer(entityid, playerName)
+  if not verifyEntity(entityid) then return end; if not Player.isPlayer(playerName) then return end
+  local cx, cy = entityData[entityid].coordinates[1], entityData[entityid].coordinates[1]
+  local px, py = Player.getCoordinates(playerName)
+  local cdim, pdim = entityData[entityid].dim, Player.getDimension(playerName)
+  
+  if cdim ~= pdim then return end; if cx == px and cy == py then return true end
+
+  local minX = min(cx, px)
+  local eq = minX == cx
+  local minY = eq and cy or py
+  local maxX = eq and px or cx
+  local maxY = eq and py or cy
+  local xDiff = maxX - minX
+  local yDiff = maxY - minY
+  local canSee = true
+
+  return true
+  --[[
+  if xDiff > abs(yDiff) then
+    local y = minY
+    local dy = yDiff / xDiff
+    for x = minX, maxX do
+      if blockExists(cdim, x, floor(y + 0.5)) then canSee = false; break end
+      y = y + dy
+    end
+  else
+    local x = minX
+    local dx = xDiff / yDiff
+    if maxY >= minY then
+      for y = minY, maxY do
+        if blockExists(cdim, floor(x + 0.5), y) then canSee = false; break end
+        x = x + dx
+      end
+    else
+      for y = minY, maxY,-1 do
+        if blockExists(cdim, floor(x + 0.5), y) then canSee = false; break end
+        x = x - dx
+      end
+    end
+  end
+  return canSee
+  --]]
+end
+
+function Entity.getNearbyPlayers(entityid, radius)
+  if not verifyEntity(entityid, {radius}, _, {canSeePlayer}) then return end
+  local players = Player.getNames(); local foundPlayers = {}
+  local cx, cy = unpack(entityData[entityid].coordinates)
+  for i = 1, #players do
+    local px, py = Player.getCoordinates(players[i])
+    if px >= cx - radius and px <= cx + radius and py >= cy - radius and py <= cy + radius then
+      foundPlayers[#foundPlayers + 1] = {sqrt((cx - px) ^ 2 + (cy + py) ^ 2), players[i]}
+    end
+  end
+  return foundPlayers
+end
+
+function Entity.distanceToPlayer(entityid, playerName)
+  if not verifyEntity(entityid, _, {playerName}) then return end
+  if not Player.isPlayer(playerName) then return end
+  local cx, cy = entityData[entityid].coordinates[1], entityData[entityid].coordinates[1]
+  local px, py = Player.getCoordinates(playerName)
+  local cdim, pdim = entityData[entityid].dim, Player.getDimension(playerName)
+  if cdim ~= pdim then return end; return sqrt((cx - px) ^ 2 + (cy + py) ^ 2)
+end
+
+function Entity.isTakingDamage(entityid)
+
+end
+
+function Entity.getClosestPlayer(entityid, radius, canSeePlayer)
+  if not verifyEntity(entityid, {radius}, _, {canSeePlayer}) then return end
+  local foundPlayers = Entity.getNearbyPlayers(entityid, radius)
+  if #foundPlayers > 1 then table.sort(foundPlayers, function(a, b) return a[1] < b[1] end) end
+  if foundPlayers[1] then 
+    if canSeePlayer then
+      if Entity.canSeePlayer(entityid, foundPlayers[1][2]) then return foundPlayers[1][2] end
+    else
+      return foundPlayers[1][2] 
+    end
+  end
 end
 
 function Entity.attack(entityid, playerName)
+  if not verifyEntity(entityid, _, {playerName}) then return end
+  local px, py = Player.getCoordinates(playerName)
+  local cx, cy = unpack(entityData[entityid].coordinates)
+  local heldItem = entityData[entityid].heldItem
 
+  if heldItem and Assets[heldItem] and Assets[heldItem].type == "bow" then
+
+  else
+    if (cy - 1 == py and cx == px) or (cx + 1 == px and cy == py) or (cy + 1 == py and cx == px) or (cx - 1 == px and cy == py) or (cy == py and cx == px) then 
+      Player.hurt(playerName, entityData[entityid].damage); return true
+    end
+  end
 end
