@@ -30,63 +30,15 @@ local debugMode, hideGUI = false, true
 local multiplayer = false
 local askForUpdate = false
 local targetFPS = 20 -- Sets the target FPS you want the game to run at. Of course, anything above 20 wouldn't work, as 20 is the max always.
-local checkForUpdates = true
-
-function _G.getMainFolder() return shell.getRunningProgram():sub(1, #shell.getRunningProgram() - #fs.getName(shell.getRunningProgram())) end
-local MainFolder = getMainFolder()
+--local checkForUpdates = true
+ 
+local MainFolder = shell.getRunningProgram():sub(1, #shell.getRunningProgram() - #fs.getName(shell.getRunningProgram()))
 local APIFolder, ModsFolder, SavesFolder = MainFolder.. "/API", MainFolder.. "/Mods", MainFolder.. "/Saves"
 if MainFolder == "" then MainFolder = "/" end
-
-local ok, err = loadfile(MainFolder.. "Assets")
-if not ok then error(err) end; pcall(ok)
- 
-if checkForUpdates and http then
-  local latestVersion = http.get("http://pastebin.com/raw.php?i=N2FmL2Q7")
-  if latestVersion then
-    if latestVersion.readAll() ~= File.getVersion() then askForUpdate = true end
-    latestVersion.close()
-    
-    if askForUpdate then
-      setBackgroundColor(colors.black); setTextColor(colors.white)
-      clear(); setCursorPos(1, 1); sWrite("Updating... "); drawScreen()
-      print("Grabbing Installer."); drawScreen()
-      local updater = http.get("http://pastebin.com/raw.php?i=FgAggvy1")
-      local tempFile = fs.open(MainFolder.. "/.tempUpdater", "w")
-      tempFile.write(updater.readAll()); tempFile.close()
-      print("Installer Downloaded. Running"); drawScreen()
-      shell.run(MainFolder.. "/.tempUpdater", MainFolder)
-      print("Update Complete. Deleting Installer."); drawScreen()
-      fs.delete(MainFolder.. "/.tempUpdater")
-      shell.run(MainFolder.. "mc")
-    end
-  end
-end
-if askForUpdate then return end
 
 dofile(APIFolder.. "/Buffer")
 _G.Screen = Buffer.createBuffer()
 term.redirect(Screen)
-
-_G.Timer = {}
-local timers = {}
-function Timer.newTimer(time) timers[#timers + 1] = {time, time}; return #timers end
-function Timer.wentOff(ID) return timers[ID] and timers[ID][1] <= 0 end
-function Timer.restart(ID) if timers[ID] then timers[ID][1] = timers[ID][2] end end
-function Timer.remove(ID) timers[ID] = nil end
-local function updateTimers()
-  for i = 1, #timers do
-    if timers[i] and timers[i][1] > 0 then timers[i][1] = timers[i][1] - 0.05 end
-  end
-end
-
-local ok, err = loadfile(APIFolder.. "/File")
-if not ok then term.redirect(currentTerm); error(err) end; pcall(ok)
-for n, sFile in ipairs(fs.list(APIFolder)) do 
-  if sFile ~= "File" and sFile ~= "Buffer" then
-    local ok, err = loadfile(APIFolder.. "/" ..sFile)
-    if not ok then term.redirect(currentTerm); error(err) end; pcall(ok)
-  end
-end; File.loadMods()
 
 _G.nativeError = error
 _G.nativePrintError = printError
