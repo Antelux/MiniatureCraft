@@ -5,18 +5,18 @@
   This game is under the Creative Commons Attribution-NonCommercial 4.0 
   International Public License which basically means that you are free to:
 
-  Share — copy and redistribute the material in any medium or format
-  Adapt — remix, transform, and build upon the material
+  Share - copy and redistribute the material in any medium or format
+  Adapt - remix, transform, and build upon the material
 
   Under the following terms:
   
-  Attribution — You must give appropriate credit, provide a link to the license, 
+  Attribution - You must give appropriate credit, provide a link to the license, 
   and indicate if changes were made. You may do so in any reasonable manner, but 
   not in any way that suggests the licensor endorses you or your use.
   
-  NonCommercial — You may not use the material for commercial purposes.
+  NonCommercial - You may not use the material for commercial purposes.
   
-  No additional restrictions — You may not apply legal terms or technological measures 
+  No additional restrictions - You may not apply legal terms or technological measures 
   that legally restrict others from doing anything the license permits.
 
   Enjoy and have fun! :D
@@ -32,7 +32,6 @@ local askForUpdate = false
 local targetFPS = 20 -- Sets the target FPS you want the game to run at. Of course, anything above 20 wouldn't work, as 20 is the max always.
 local checkForUpdates = true
  
-<<<<<<< HEAD
 local ok, err = loadfile(MainFolder.. "Assets")
 if not ok then error(err) end; pcall(ok)
 if checkForUpdates and http then
@@ -60,9 +59,6 @@ if askForUpdate then return end
 
 function _G.getMainFolder() return shell.getRunningProgram():sub(1, #shell.getRunningProgram() - #fs.getName(shell.getRunningProgram())) end
 local MainFolder = getMainFolder()
-=======
-local MainFolder = shell.getRunningProgram():sub(1, #shell.getRunningProgram() - #fs.getName(shell.getRunningProgram()))
->>>>>>> parent of 3fb0466... 2.0.52 Update (Finally!)
 local APIFolder, ModsFolder, SavesFolder = MainFolder.. "/API", MainFolder.. "/Mods", MainFolder.. "/Saves"
 if MainFolder == "" then MainFolder = "/" end
 
@@ -70,7 +66,6 @@ dofile(APIFolder.. "/Buffer")
 _G.Screen = Buffer.createBuffer()
 term.redirect(Screen)
 
-<<<<<<< HEAD
 _G.Timer = {}
 local timers = {}
 function Timer.newTimer(time) timers[#timers + 1] = {time, time}; return #timers end
@@ -92,8 +87,6 @@ for n, sFile in ipairs(fs.list(APIFolder)) do
   end
 end; File.loadMods()
 
-=======
->>>>>>> parent of 3fb0466... 2.0.52 Update (Finally!)
 _G.nativeError = error
 _G.nativePrintError = printError
 _G.error = function(...)
