@@ -1,6 +1,6 @@
 --[[
   MiniatureCraft, a game by Detective_Smith
-  Current Version: 1.98b-Beta
+  Current Version: 2.0.52
 
   This game is under the Creative Commons Attribution-NonCommercial 4.0 
   International Public License which basically means that you are free to:
@@ -22,342 +22,265 @@
   Enjoy and have fun! :D
 --]]
 
+--[[
+	
+	Awesome Ideas:
+
+	-- Save world seed. Only save chunks which were modified. Would save a TON of space.
+	   Biome maps can be saved along with the seed for speedups.
+	   Perhaps only save the changes made to said chunk? Nah, going too far.
+
+	-- Add internal permissions system
+
+	-- Perhaps remove File API, and replace with Client & Server API?
+
+	-- Server connecting can work like this:
+	Password can have os.day()..os.time() added to the end of it, then encrypt request
+
+	-- Biomes: Work like this.
+	A function to create a biome map. It doesn't have to be part of the initial world generation.
+	Simply needs to be a map of the whole world with a number assigned to each block's biome.
+	Saving biome maps should be really simple. Have only up to 16 biomes, and save a number for each as an id.
+		
+		E.X: 0 = Plains, 1 = Desert, etc.
+	
+	When saving, simplying allocate one byte for two blocks. Then run it through the good 'ol compressor.
+	Using this, your average, 64x64 biome map should be 2 kilobytes at most.
+
+	-- Key bindings.
+
+	It generates the biomes in terms of chunks. After that, it runs a "leak" function as to spread a biome.
+	Makes it look lessy blocking sense it does it chunk by chunk first.
+
+	Current Changes:
+
+	-- Chat.addCommand(cmdName, function)
+	-- New start screen splash text.
+	-- New, easier error logging (with little messages in each error log).
+	-- require() function for use with mods and APIs. unload() removes any loaded files from memory.
+	-- reportError() function, which I need to tweak a bit.
+	-- 4 New Apis:
+	   Client, Server, Keyboard, & Timer
+	
+	-----------------------------------------------------------------------------------------------------------
+
+	TODO:
+
+	Add dungeons & Villages and stuffs
+	Make lighting more realisitc
+
+	draw heavy inspiration from the actual game. does things a lot more easily.
+
+	make ender pearl type thing
+	first wall it hits it tps you to
+
+	give items a interactOn() function.
+	called whenever an item is used.
+	
+	just have chat API draw hud on tick() function
+
+	signs!
+
+	interactOn(player, dim, x, y)
+	onTake(player, dim, x, y) -- ran when something is picked up
+	tick() function for all assets
+	isHit() function for blocks/tiles
+--]]
+
+local tArgs = {...}
 if not term.isColor() then error("Advanced Computer Required to Play.", 2) end
 
-local decToHex = {[1] = "0", [2] = "1", [4] = "2", [8] = "3", [16] = "4", [32] = "5", [64] = "6", [128] = "7", [256] = "8", [512] = "9", [1024] = "a", [2048] = "b", [4096] = "c", [8192] = "d", [16384] = "e", [32768] = "f"}
 local ScreenWidth, ScreenHeight = term.getSize()
 local debugMode, hideGUI = false, true
-local multiplayer = false
-local askForUpdate = false
-local targetFPS = 20 -- Sets the target FPS you want the game to run at. Of course, anything above 20 wouldn't work, as 20 is the max always.
---local checkForUpdates = true
- 
+
 local MainFolder = shell.getRunningProgram():sub(1, #shell.getRunningProgram() - #fs.getName(shell.getRunningProgram()))
-local APIFolder, ModsFolder, SavesFolder = MainFolder.. "/API", MainFolder.. "/Mods", MainFolder.. "/Saves"
-if MainFolder == "" then MainFolder = "/" end
+local APIFolder, ModsFolder, SavesFolder = MainFolder.. "/API/", MainFolder.. "/Mods/", MainFolder.. "/Saves/"
 
-dofile(APIFolder.. "/Buffer")
-_G.Screen = Buffer.createBuffer()
-term.redirect(Screen)
+local errorText = {"Looks like jimmy had an accident.", "'Ha. I bet this text is red.'", "Uh-oh.", "That wasn't supposed to happen.", "Why.", "omgagain???", "Just your typical error message.", "Fix it already!", "get rekt", "By reading this, you've wasted time you could've been using fixing the error.", "What's the point of this text again?", "lol", "Dang it, make the game better!", "It was the chair!", "It wasn't me!", "Stop crashing the game!", "Fun.", "Yep.", "Sigh.", "Always with the errors.", "Blame Det.", "AN ERROR HAS OCCURED", "BSOD.", "Gosh darnit!", "Always with the crashes.", "Look at the error, not me.", "How could you!?", "Now with Beach Balls of Death."}
+local loadedFiles = {}
 
-_G.nativeError = error
-_G.nativePrintError = printError
-_G.error = function(...)
-  fs.delete(MainFolder.. "errorlog")
-  local file = fs.open(MainFolder.. "errorlog", "w")
-  file.writeLine(...); file.close()
-  --_G.nativeError()
-end
-_G.printError = _G.error
-
-dofile(MainFolder.. "/Assets")
-for n, sFile in ipairs(fs.list(APIFolder)) do dofile(APIFolder.. "/" ..sFile) end; File.loadMods()
-local World = Level.newWorld(ScreenWidth, ScreenHeight); Level.setWorld(World)
-local Width, Height = Level.getSize()
-local Assets = File.loadAssets()
-local OffsetX, OffsetY = 0, 0
-
--- Various Timers for the World
-local drawUpdateTimer = os.startTimer(0.5)
-local saveWorldTimer = os.startTimer(300)
-
-local currentPlayer = Player.getCurrentPlayer()
-local currentTime
-local currentInterface = false
-local selectedAsset = 1
-local Dimension = 0
-local PlayerX, PlayerY = 0, 0 
-
-if checkForUpdates and http then
-  local latestVersion = http.get("http://pastebin.com/raw.php?i=N2FmL2Q7")
-  if not latestVersion then return end
-  if latestVersion.readAll() ~= File.getVersion() then askForUpdate = true end
-  latestVersion.close()
-  
-  if askForUpdate then
-    Screen.setBackgroundColor(colors.black); Screen.setTextColor(colors.white)
-    Screen.clear(); Screen.setCursorPos(1, 1); Screen.write("Updating... "); Screen.drawScreen()
-    print("Grabbing Installer."); Screen.drawScreen()
-    local updater = http.get("http://pastebin.com/raw.php?i=FgAggvy1")
-    local tempFile = fs.open(MainFolder.. "/.tempUpdater", "w")
-    tempFile.write(updater.readAll())
-    tempFile.close()
-    print("Installer Downloaded. Running"); Screen.drawScreen()
-    shell.run(MainFolder.. "/.tempUpdater", MainFolder)
-    print("Update Complete. Deleting Installer."); Screen.drawScreen()
-    fs.delete(MainFolder.. "/.tempUpdater")
-    shell.run(MainFolder.. "mc"); nativeError()
-  end
+_G.reportError = function(fileName, err)
+	local errs = {}; for s in string.gmatch(err, "([^:]+)") do errs[#errs + 1] = s end
+	local filen = {}; for s in string.gmatch(fileName, "([^/]+)") do filen[#filen + 1] = s end
+	local errlog = MainFolder.."errors/"..filen[#filen].."_err"; fs.delete(errlog);
+	local file = fs.open(errlog, "w"); math.randomseed(os.time())
+	file.writeLine("\\\\ " ..errorText[math.random(#errorText)])
+	file.writeLine("Error log generated on day " ..os.day().. " at " ..textutils.formatTime(os.time()).. ".\n")
+	file.writeLine("Looks like the error occured on line " ..(errs[2] or "?").. ".\nHere's what went wrong: ")
+	file.writeLine("\n  " ..(errs[3] or "MISSING_ERROR_MESSAGE").. "\n\nYou should probably report this error.")
+	file.close(); loadedFiles = nil; _G.require = nil; _G.reportError = nil; _G.unload = nil; error(err) 
 end
 
-local draw = Screen.drawScreen
-local startFrame, startTick = os.clock(), os.clock()
-local endFrame, endTick = os.clock(), os.clock()
-if targetFPS > 20 then targetFPS = 20 elseif targetFPS < 1 then targetFPS = 1 end
-local clientTick = 1 / targetFPS 
-_G.Screen.drawScreen = function()
-  local currentTime = os.clock()
-  if debugMode then
-    local AssetName = Assets[selectedAsset]
-    if AssetName then AssetName = AssetName.name else AssetName = "None" end
-    Screen.setBackgroundColor(colors.gray); Screen.setTextColor(colors.white); Screen.setCursorPos(1, 1)
-    local FrameDifference, UpdateDifference = startFrame - endFrame, startTick - endTick
-    if FrameDifference == 0 then FrameDifference = clientTick end; if UpdateDifference == 0 then UpdateDifference = clientTick end
-    if Player.getMode(currentPlayer) == 0 then Screen.write("FPS: " ..string.sub(1 / FrameDifference, 1, 2).. ", UPS: " ..string.sub(1 / UpdateDifference, 1, 2).. ", Time: " ..textutils.formatTime(Level.getTime()))
-    else Screen.write("FPS: " ..string.sub(1 / FrameDifference, 1, 2).. ", UPS: " ..string.sub(1 / UpdateDifference, 1, 2).. ", Time: " ..textutils.formatTime(Level.getTime()).. ", T: " ..AssetName.. ":" ..selectedAsset) end
-  end
-  draw()
+_G.require = function(fileName)
+	if loadedFiles[fileName] then return loadedFiles[fileName] end
+	if not fs.exists(MainFolder..fileName) then reportError(fileName, "error:n/a: the file " ..MainFolder..fileName.. " does not exist.") end
+	local ok, err = loadfile(MainFolder..fileName); if not ok then reportError(fileName, err) end
+	local ok, loadedTable = pcall(ok, MainFolder); if not ok then reportError(fileName, loadedTable) end
+	loadedFiles[fileName] = type(loadedTable) == "table" and loadedTable or reportError(fileName, fileName.. ":n/a: this file must return a table")
+	return loadedFiles[fileName]
 end
 
-local function updateGame()
-  OffsetX, OffsetY = Level.getOffset()
-  Dimension = Player.getDimension(currentPlayer) or demoDimension
-  Level.updateArea(Dimension, OffsetX, OffsetY, OffsetX + ScreenWidth, OffsetY + ScreenHeight) 
-
-  local newTime = Level.getTime() + (clientTick / targetFPS) / 2
-  if newTime >= 25 then newTime = 1 end; Level.setTime(newTime)
-
-  local entities = Entity.getEntities()
-  for i = 1, #entities do
-    if entities[i] and entities[i].currentDim == Dimension then 
-      if entities[i].script then entities[i].script(i) end
-    end
-  end
+_G.unload = function(fileName)
+	loadedFiles[fileName] = nil
 end
 
-local demoDimension = math.random(-3, 0)
-local function updateScreen()
-  OffsetX, OffsetY = Level.getOffset()
-  Dimension = Player.getDimension(currentPlayer) or demoDimension
-  local lMap = Level.getLightingMap()
+local Assets = require "Assets"
+local Level = require "API/Level"
+local Client = require "API/Client"
+local Buffer = require "API/Buffer"
+local Chat = require "API/Chat"
+local Crafting = require "API/Crafting"
+local Player = require "API/Player"
+local Entity = require "API/Entity"
+local Timer = require "API/Timer"
+local Keyboard = require "API/Keyboard"
+local Interface = require "API/Interface"
+local Keybindings = require "API/Keybindings"
 
-  -- Draws the initial world, directly interfaces with the buffer --
-  for y = 1, ScreenHeight do 
-    local textLine, tColorLine, bColorLine = "", "", ""
-    for x = 1, ScreenWidth do 
-      local mx, my = x + OffsetX, y + OffsetY
-      if mx > Width then mx = Width end
-      if mx < 0 then mx = 0 end
-      if my > Height then my = Height end
-      if my < 0 then my = 0 end
-      if Level.isInGame() and lMap[Dimension] and not(lMap[Dimension][mx] and lMap[Dimension][mx][my]) then
-        bColorLine = bColorLine.. "" ..decToHex[colors.black]
-        tColorLine = tColorLine.. "" ..decToHex[colors.black]
-        textLine = textLine.. " "
-      else
-        local background, foreground, symbol = Level.getTexture(Dimension, mx, my, useAnimations)
-        if lMap[Dimension] and lMap[Dimension][mx] and lMap[Dimension][mx][my] and type(lMap[Dimension][mx][my]) == "string" then symbol = lMap[Dimension][mx][my]; foreground = colors.black end
-        if type(background) == "number" then bColorLine = bColorLine.. "" ..decToHex[background] else bColorLine = bColorLine.. "" ..decToHex[colors.purple] end 
-        if type(foreground) == "number" then tColorLine = tColorLine.. "" ..decToHex[foreground] else tColorLine = tColorLine.. "" ..decToHex[colors.black] end
-        if type(symbol) == "string" then textLine = textLine.. "" ..symbol else textLine = textLine.. "#" end 
-      end
-    end
-    _G.Screen.textScreen[y] = textLine
-    _G.Screen.textColor[y] = tColorLine
-    _G.Screen.backColor[y] = bColorLine
-  end
+local floor, ceil = math.floor, math.ceil
+local tick = os.startTimer(0.05)
+local viewWidth = ceil(ScreenWidth*0.0625)
+local viewHeight = ceil(ScreenHeight*0.0625)
+local player = Player.new(tArgs[1] or "Player", {color = colors[tArgs[2]], x = tonumber(tArgs[3]), y = tonumber(tArgs[4])})
+local ox, oy = floor(ScreenWidth*.5 + 0.5), floor(ScreenHeight*.5 + 0.5)
+local currentAsset = 1
 
-  local entities = Entity.getEntities()
-  for i = 1, #entities do
-    if entities[i] and entities[i].currentDim == Dimension then 
-      local CursorPosX, CursorPosY = entities[i].coordinates[1], entities[i].coordinates[2]
-      local backColor = Level.getTexture(Dimension, CursorPosX, CursorPosY, useAnimations) or colors.black 
-      if CursorPosX >= OffsetX and CursorPosX <= ScreenWidth + OffsetX and CursorPosY >= OffsetY and CursorPosY <= ScreenHeight + OffsetY then
-        CursorPosX, CursorPosY = CursorPosX - OffsetX, CursorPosY - OffsetY
-        Screen.setCursorPos(CursorPosX, CursorPosY)
-        Screen.setBackgroundColor(backColor)
-        Screen.setTextColor(entities[i].texture[1])
-        Screen.write(entities[i].texture[2])
-      end
-    end
-  end
+--[[ Some example Shaders
+-- Confetti
+Buffer.shader(function(pixel, x, y)
+	return pixel[1], math.random(50) == 1 and 2 ^ math.random(0, 15) or pixel[2], pixel[3]
+end)
 
-  local players = Player.getNames()
-  for i = 1, #players do
-    local PlayerX, PlayerY = Player.getCoordinates(players[i])
-    local backColor = Level.getTexture(Dimension, PlayerX, PlayerY, useAnimations) or colors.black 
-    local direction = Player.getDirection(players[i])
-    local playerColor = Player.getColor(players[i])
-    local CursorPosX, CursorPosY = PlayerX, PlayerY 
-    if CursorPosX >= OffsetX and CursorPosX <= ScreenWidth + OffsetX and CursorPosY >= OffsetY and CursorPosY <= ScreenHeight + OffsetY then
-      CursorPosX, CursorPosY = CursorPosX - OffsetX, CursorPosY - OffsetY
-      Screen.setCursorPos(CursorPosX, CursorPosY)
-      Screen.setBackgroundColor(backColor)
-      if playerColor == backColor then
-        if playerColor == colors.white then playerColor = colors.black return end
-        if playerColor == colors.black then playerColor = colors.white return end
-        playerColor = playerColor / 2
-      end
-      Screen.setTextColor(playerColor)
-      if direction == 1 then Screen.write("^")
-      elseif direction == 2 then Screen.write(">")
-      elseif direction == 3 then Screen.write("V")
-      else Screen.write("<") end
-      if hideGUI then return end
-      Screen.setBackgroundColor(colors.gray)
-      Screen.setTextColor(colors.white)
-      Screen.setCursorPos(CursorPosX - math.floor(#players[i] / 2), CursorPosY - 2)
-      Screen.write(players[i])
-    end
-  end
+-- Reverse
+local reverse = {[1] = 32768, [2] = 16384, [4] = 8192, [8] = 4096, [16] = 2048, [32] = 1024, [64] = 512, [128] = 256, [256] = 128, [512] = 64, [1024] = 32, [2048] = 16, [4096] = 8, [8192] = 4, [16384] = 2, [32768] = 1}
+Buffer.shader(function(pixel, x, y)
+	return reverse[ pixel[1] ], reverse[ pixel[2] ], pixel[3]
+end)
 
-  if not hideGUI and not debugMode and Player.isAlive(currentPlayer) then -- Top-Left UI
-    Screen.setTextColor(colors.white)
-    for i = 1, 2 do paintutils.drawLine(1, i, 10, i, colors.black)  end
-    paintutils.drawLine(1, 1, Player.getHealth(currentPlayer) / 2, 1, colors.red)
-    Screen.setCursorPos(1, 1); Screen.write("HEALTH")
-    paintutils.drawLine(1, 2, Player.getEnergy(currentPlayer) / 2, 2, colors.cyan)
-    Screen.setCursorPos(1, 2); Screen.write("ENERGY")
+-- Grayscale
+local grayscale = {[4096] = 32768, [16384] = 32768, [1024] = 32768, [2048] = 128, [8192] = 128, [4] = 128, [2] = 256, [64] = 256, [512] = 256, [16] = 1, [32] = 1, [8] = 1}
+Buffer.shader(function(pixel, x, y)
+	return grayscale[ pixel[1] ] or pixel[1], grayscale[ pixel[2] ] or pixel[2], pixel[3]
+end)
+--]]
 
-    -- Shows if the player is holding anything
-    local currentItem = Player.getHeldItem(currentPlayer)
-    if currentItem then
-      local playerInventory = Player.getInventory(currentPlayer)
-      if not playerInventory[currentItem] or not playerInventory[currentItem].ID then return end
-      local item = Assets[playerInventory[currentItem].ID]
+local Screen = Buffer.getScreen()
+local colorChange = {[1] = 256, [2] = 16384, [4] = 1024, [8] = 512, [16] = 2, [32] = 8192, [64] = 4, [128] = 32768, [256] = 128, [512] = 2048, [1024] = 4, [2048] = 512, [4096] = 128, [8192] = 32, [16384] = 4096, [32768] = 128}
+local function drawWorld()
+	for y = 2, 17 do
+		local Screen_Y = Screen[y]
+		for x = 1, ScreenWidth do 
+			local pixel = Screen_Y[x]
+			pixel[1], pixel[2], pixel[3] = Level.getTexture(0, x - ox + player.x, y - oy + player.y)
+		end
+	end
 
-      if playerInventory[currentItem].Durability then
-        for i = 1, 3 do
-          paintutils.drawLine(1, (ScreenHeight - 3) + i, 15,(ScreenHeight - 3) + i, colors.gray)
-        end
-        Screen.setTextColor(colors.yellow)
-        Screen.setCursorPos(8 - math.floor((#item.name / 2)), ScreenHeight - 2)
-        Screen.write(item.name)
-        if playerInventory[currentItem].Durability > 0 then
-          paintutils.drawLine(2, ScreenHeight - 1, math.ceil(13 / (item.durability / playerInventory[currentItem].Durability) + 1), ScreenHeight - 1, colors.lime)
-          Screen.setBackgroundColor(colors.gray)
-          Screen.setCursorPos(8 - string.len(playerInventory[currentItem].Durability), ScreenHeight)
-          Screen.setTextColor(colors.white)
-          Screen.write(playerInventory[currentItem].Durability.. "/" ..item.durability)
-        end
-      else
-        Screen.setBackgroundColor(colors.gray)
-        Screen.setCursorPos(1, ScreenHeight)
-        Screen.setTextColor(colors.yellow)
-        Screen.write(" " ..item.name)
-        Screen.setTextColor(colors.white)
-        Screen.write(" x" ..playerInventory[currentItem].Amount.. " ")
-        Screen.setBackgroundColor(item.texture[1] or colors.gray)
-        Screen.setTextColor(item.texture[2] or colors.gray)
-        Screen.write(item.texture[3] or "?")
-        Screen.setBackgroundColor(colors.gray)
-        Screen.write(" ")
-      end
-    end
-  end
-
-  if not currentInterface then Screen.drawScreen() end
+	local direction = player.dir; local pixel = Screen[oy][ox]
+	pixel[2] = pixel[1] ~= player.color and player.color or colorChange[player.color]
+	pixel[3] = (direction == 1 and "^") or (direction == 2 and ">") or (direction == 3 and "V") or "<"
+	Buffer.setCursorPos(ox - floor(#player.name * 0.5), oy - 2)
+	Buffer.setBackgroundColor(colors.gray); Buffer.setTextColor(colors.white)
+	Buffer.write(player.name)
+	Buffer.draw()
 end
 
-local function checkOffset(ValueX, ValueY)
-  local OffsetX2, OffsetY2 = OffsetX + (ValueX or 0), OffsetY + (ValueY or 0)
-  if PlayerX - OffsetX2 < math.floor(ScreenWidth / 2) or math.floor(ScreenWidth / 2) < PlayerX - OffsetX2 then OffsetX2 = OffsetX end
-  if PlayerY - OffsetY2 < math.floor(ScreenHeight / 2) or math.floor(ScreenHeight / 2) < PlayerY - OffsetY2 then OffsetY2 = OffsetY end
-  if OffsetX2 < 0 then OffsetX2 = 0 end; if OffsetY2 < 0 then OffsetY2 = 0 end
-  Level.setOffset(OffsetX2, OffsetY2)
-  updateScreen()
+local function drawGUI()
+	Buffer.setBackgroundColor(colors.black)
+	Buffer.setCursorPos(3, 18)
+	Buffer.clearLine()
+	Buffer.setTextColor(colors.yellow)
+	Buffer.write("MiniatureCraft " ..Assets.getVersion())
+
+	local str = "X: " ..player.x.. ", Y: " ..player.y
+	Buffer.setCursorPos(ScreenWidth - #str - 1, 18)
+	Buffer.setTextColor(colors.white)
+	Buffer.write(str)
+
+	Buffer.setCursorPos(3, 19)
+	Buffer.clearLine()
+	Buffer.setCursorPos(33, 19)
+	Buffer.write("Press 'e' to exit")
+	Buffer.setCursorPos(3, 19)
+	Buffer.setTextColor(colors.lightGray)
+	Buffer.write("Selected: ")
+	Buffer.setTextColor(colors.white)
+	local asset = Assets[currentAsset]
+	Buffer.write("[" ..currentAsset.. "] " ..(asset and asset.name or "None").. " ")
+	local bg, fg, tc = asset and asset.texture[1] or colors.black, asset and asset.texture[2] or colors.black, asset and asset.texture[3] or " "
+	Buffer.setBackgroundColor(bg)
+	Buffer.setTextColor(fg)
+	Buffer.write(tc)
+	Buffer.draw()
 end
 
-local function inputHandler(eventData)
-  currentPlayer = Player.getCurrentPlayer(); if not Player.isAlive(currentPlayer) then return end
-  PlayerX, PlayerY = Player.getCoordinates(currentPlayer)
-  if eventData[1] == "key" then -- Key events
-    if eventData[2] == 17 or eventData[2] == 200 then -- Up Key
-      --if multiplayer then getData(textutils.serialize({"Player", "up"})); return end
-      Player.setDirection(currentPlayer, 1)
-      if Level.checkForCollision(Dimension, PlayerX, PlayerY - 1) then return end
-      if OffsetY > 0 then checkOffset(_, -1) end
-      if PlayerY > 1 then Player.setCoordinates(currentPlayer, _, "sub1") end
-
-    elseif eventData[2] == 31 or eventData[2] == 208 then -- Down Key
-      --if multiplayer then getData(textutils.serialize({"Player", "down"})); return end
-      Player.setDirection(currentPlayer, 3)
-      if Level.checkForCollision(Dimension, PlayerX, PlayerY + 1) then return end
-      if OffsetY < Height - ScreenHeight then checkOffset(_, 1) end
-      if PlayerY < Height then Player.setCoordinates(currentPlayer, _, "add1") end
-
-    elseif eventData[2] == 30 or eventData[2] == 203 then -- Left Key
-      --if multiplayer then getData(textutils.serialize({"Player", "left"})); return end
-      Player.setDirection(currentPlayer, 4)
-      if Level.checkForCollision(Dimension, PlayerX - 1, PlayerY) then return end
-      if OffsetX > 0 then checkOffset(-1) end
-      if PlayerX > 1 then Player.setCoordinates(currentPlayer, "sub1") end
-
-    elseif eventData[2] == 32 or eventData[2] == 205 then -- Right Key
-      --if multiplayer then getData(textutils.serialize({"Player", "right"})); return end
-      Player.setDirection(currentPlayer, 2)
-      if Level.checkForCollision(Dimension, PlayerX + 1, PlayerY) then return end
-      if OffsetX < Width - ScreenWidth then checkOffset(1) end
-      if PlayerX < Width then Player.setCoordinates(currentPlayer, "add1") end
-
-    elseif eventData[2] == 18 then -- E
-      --if multiplayer then getData(textutils.serialize({"Player", "interact"})); return end
-      local interactionCoords = {Player.getFacingCoords(currentPlayer)}
-      local Block = Level.getData(Dimension, interactionCoords[1], interactionCoords[2]).Block
-      --currentInterface = Menu.getInterface("Inventory"); if not Block then return end
-      currentInterface = "Inventory"; if not Block then return end
-      if Crafting.isCraftingTable(Block.ID) then currentInterface = Menu.getInterface("Crafting") 
-      elseif Block.ID and Assets[Block.ID].interface then currentInterface = Assets[Block.ID].interface end
-
-    elseif eventData[2] == 14 then currentInterface = Menu.getInterface("PauseMenu") -- Backspace
-    elseif eventData[2] == 42 then Player.lockDirection(currentPlayer, not Player.lockedDirection(currentPlayer)) -- Shift
-    elseif eventData[2] == 59 then hideGUI = not hideGUI -- F1
-    -- Disabled temporarily
-    -- elseif eventData[2] == 60 then Entity.spawnEntity(452, Dimension, PlayerX + 1, PlayerY); Entity.spawnEntity(451, Dimension, PlayerX + 1, PlayerY); Entity.spawnEntity(450, Dimension, PlayerX + 1, PlayerY) -- F2
-    elseif eventData[2] == 61 then debugMode = not debugMode  -- F3
-    elseif eventData[2] == 57 then Player.useItem(currentPlayer) --if multiplayer then getData(textutils.serialize({"Player", "useItem"})); return end -- Space Bar
-    elseif eventData[2] == 20 then currentInterface = Menu.getInterface("Chat"); os.queueEvent("key", 14) -- T
-    elseif eventData[2] == 53 then currentInterface = Menu.getInterface("Chat"); os.queueEvent("key", 14); os.queueEvent("char", "/") end -- /
-
-  elseif eventData[1] == "mouse_scroll" and Player.getMode(currentPlayer) == 1 then selectedAsset = selectedAsset - eventData[2]
-  elseif string.find(eventData[1], "mouse_") and Player.getMode(currentPlayer) == 1 then
-    if eventData[2] == 1 then
-      if Assets[selectedAsset] then
-        if Assets[selectedAsset].type == "tile" or Assets[selectedAsset].type == "liquid" then Level.setData(Dimension, eventData[3] + OffsetX, eventData[4] + OffsetY, {Tile = {ID = selectedAsset}})
-        elseif Assets[selectedAsset].type == "block" or Assets[selectedAsset].type == "blocktile" then Level.setData(Dimension, eventData[3] + OffsetX, eventData[4] + OffsetY, {Block = {ID = selectedAsset}}) end
-      end
-    elseif eventData[2] == 2 then Level.setData(Dimension, eventData[3] + OffsetX, eventData[4] + OffsetY, {Block = {ID = false}}) end
-  end
-  Screen.drawScreen()
-end
-
-local justOpened, command = true
-local function drawInterface(eventData)
-  if currentInterface and eventData then
-    if justOpened then eventData = {}; justOpened = false end
-    if type(currentInterface) == "string" then command = Interface.updateInterface(currentInterface, eventData, currentPlayer)
-    elseif type(currentInterface) == "function" then command = currentInterface(eventData, currentPlayer) end
-    if command then currentInterface = false; justOpened = true end; if command == "quit" then File.saveWorld(File.getCurrentWorldName()); Player.setPlayers({}); Level.setInGame(false) return true end
-  end 
-end
-
-local Game = coroutine.create(function() while true do updateGame(); coroutine.yield() end end) 
-local Render = coroutine.create(function() while true do updateScreen(); coroutine.yield() end end) 
-
-function singlePlayer()
-  local gameTick = os.startTimer(clientTick); checkOffset()
-  while Level.isInGame() do 
-    local eventData = {os.pullEvent()}; World = Level.getWorld()
-    if eventData[1] == "term_resize" then ScreenWidth, ScreenHeight = term.getSize(); _G.Screen.Width, _G.Screen.Height = ScreenWidth, ScreenHeight; updateScreen() end
-    if eventData[1] == "timer" then
-      if eventData[2] == gameTick then
-        gameTick, startTick = os.startTimer(clientTick), os.clock()
-        local ok, result = coroutine.resume(Game); if not ok then error(result) end; endTick, startFrame = os.clock(), os.clock()
-        local ok, result = coroutine.resume(Render); if not ok then error(result) end; endFrame = os.clock()
-      elseif eventData[2] == saveWorldTimer then File.saveWorld(File.getCurrentWorldName()); Chat.sendMessage("/say World Saved", currentPlayer); saveWorldTimer = os.startTimer(300) end
-    elseif eventData[1] ~= "rednet" and not currentInterface then inputHandler(eventData) end
-    if eventData[1] ~= "rednet" and currentInterface then drawInterface(eventData); Screen.drawScreen() end
-  end
-  drawUpdateTimer = os.startTimer(0.5)
-end
-
+drawWorld(); drawGUI()
+local mods = Client.getMods()
 while true do
-  local eventData = {os.pullEvent()}
-  if eventData[1] == "term_resize" then ScreenWidth, ScreenHeight = term.getSize(); _G.Screen.Width, _G.Screen.Height = ScreenWidth, ScreenHeight; Screen.drawScreen() end
-  if (eventData[1] == "timer" and eventData[2] == drawUpdateTimer) or eventData[1] == "key" or string.find(eventData[1], "mouse_") or eventData[1] == "char" then 
-    if eventData[1] == "timer" then drawUpdateTimer = os.startTimer(0.5); updateScreen(true) end
-    local action = Menu.getInterface("StartMenu")(eventData, currentPlayer); Screen.drawScreen()  
-    if action == "singlePlayer" then hideGUI = false; Width, Height = Level.getSize(); World = Level.getWorld(); updateScreen();
-    Screen.drawScreen(); Level.setInGame(true); drawUpdateTimer = os.startTimer(0.5); singlePlayer(); currentTime = Level.getTime() end
-  end
+	local event, par1, par2, par3 = coroutine.yield(); local x, y = player.x, player.y
+	local cx, cy = floor((x - ox - 1) * 0.0625), floor((y - oy - 1) * 0.0625)
+
+	if event == "timer" then
+		tick = os.startTimer(0.05)
+		for i = 1, #mods do 
+			--player.color = 2 ^ math.random(15)
+			mods[i].Tick() 
+		end
+
+		for vy = 0, viewHeight do
+			for vx = 0, viewWidth do
+				Level.updateChunk(0, cx + vx, cy + vy)
+			end
+		end
+		drawWorld()
+
+	elseif event == "key" or event == "key_up" then
+		Keyboard.updateKeys(event, par1, par2)
+
+		if Keyboard.isDown(Keybindings.up) then player:direction(1); player.y = player.y - (Level.checkForCollision(0, x, y - 1) and 0 or 1) end
+		if Keyboard.isDown(Keybindings.left) then player:direction(4); player.x = player.x - (Level.checkForCollision(0, x - 1, y) and 0 or 1) end
+		if Keyboard.isDown(Keybindings.down) then player:direction(3); player.y = player.y + (Level.checkForCollision(0, x, y + 1) and 0 or 1) end
+		if Keyboard.isDown(Keybindings.right) then player:direction(2); player.x = player.x + (Level.checkForCollision(0, x + 1, y) and 0 or 1) end
+		if Keyboard.isDown(Keybindings.lock) then player.lock = not player.lock end
+
+		if Keyboard.isDown(keys.r) then Level.unloadChunk(0) end
+		if Keyboard.isDown(keys.e) then break end
+
+		for vy = 0, viewHeight do
+			for vx = 0, viewWidth do
+				Level.loadChunk(0, cx + vx, cy + vy)
+			end
+		end
+		drawGUI(); drawWorld()
+
+	elseif event == "mouse_scroll" then
+		currentAsset = currentAsset - par1
+		if currentAsset < 1 then currentAsset = 74 end
+		if currentAsset > 74 then currentAsset = 1 end
+		drawGUI()
+
+	elseif event == "mouse_click" or event == "mouse_drag" then
+		if par1 == 1 then
+			local asset = Assets[currentAsset]
+			if asset then
+				local isTile = asset.type == "tile" or asset.type == "liquid"
+				Level.data(0, par2 + x - ox, par3 + y - oy, isTile and currentAsset, _, not isTile and currentAsset)
+			end
+		elseif par1 == 2 then
+			Level.data(0, par2 + x - ox, par3 + y - oy, _, _, false)
+		elseif par1 == 3 then
+			local spot = Level.data(0, par2 + x - ox, par3 + y - oy)
+			currentAsset = (spot and spot[5] or spot[1]) or currentAsset 
+			drawGUI()
+		end
+		drawWorld()
+	end
 end
+
+term.setBackgroundColor(colors.black)
+term.setTextColor(colors.yellow)
+term.clear(); term.setCursorPos(1,1)
+print("Thanks for playing MiniatureCraft " ..Assets.getVersion().. "! Hope you enjoyed it! (Created by Detective_Smith)")
+term.setTextColor(colors.white); print()
+
+--local ip, port = 29, 25565
+--if Client.connect(ip, port) then print("Join successful!") else print("No response.") end

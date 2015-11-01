@@ -1,0 +1,79 @@
+local computerID, yield, startTimer, cancelTimer, time, remove = os.getComputerID(), coroutine.yield, os.startTimer, os.cancelTimer, os.time, table.remove
+local premadePacket, openPort, modem, connectedIP, connectedPort = {"Player"}, math.random(65535)
+local singleplayer, inGame, paused = true, false, false
+local MainFolder = ...; local loadedMods = {}
+local Assets = require "Assets"
+
+local folders = {"API", "Mods", "Saves", "Config"}
+for i = 1, #folders do if not fs.exists(MainFolder.. "/" ..folders[i]) then fs.makeDir(MainFolder.. "/" ..folders[i]) end end
+
+local foundMods = fs.list(MainFolder.. "/Mods/")
+for i = 1, #foundMods do
+    local fileName = foundMods[i]
+    local ok, err = loadfile(MainFolder.."/Mods/"..fileName); if not ok then reportError(fileName, err) end
+    local ok, loadedTable = pcall(ok, MainFolder); if not ok then reportError(fileName, loadedTable) end
+    loadedMods[i] = type(loadedTable) == "table" and loadedTable or reportError(fileName, fileName.. ":n/a: this mod must return a table")
+    if loadedMods[i].Assets then for id, data in pairs(loadedMods[i].Assets) do Assets[id] = data end end
+    loadedMods[i].Tick = loadedMods[i].Tick or function() end; loadedMods[i].File = fileName
+end
+
+local function isValidPacket(packet)
+    local packet_1, packet_2 = packet[1], packet[2]
+    return type(packet_1) == "number" and packet_1 == connectedIP and type(packet_2) == "string" and packet_2 == premadePacket[1] and packet[3]
+end
+
+local function encryptString(string, password)
+    local password = (password or "password")..time()
+end
+
+local function checkForModem()
+    if not modem then 
+        for _, name in ipairs(peripheral.getNames()) do
+            if peripheral.getType(name) == "modem" then
+                modem = peripheral.wrap(name); return true
+            end
+        end
+        reportError("Client", "Client:n/a: modem has been disconnected.")
+    end
+end
+
+local function packetInternal(data, port)
+    if queuedPackets[1] then premadePacket[2] = remove(queuedPackets, 1); return premadePacket end
+    if data then
+        premadePacket[2] = data 
+        if connectedIP == computerID then queuedPackets[#queuedPackets + 1] = data
+        else checkForModem(); modem.transmit(connectedPort, openPort, premadePacket) end
+        return
+    end
+
+    local timeoutTimer = startTimer(10)
+    while true do
+        local event, timer, _, replyChannel, packet = yield()
+        if event == "modem_message" and replyChannel == connectedPort and isValidPacket(packet) then
+            cancelTimer(timeoutTimer); return packet[3]
+
+        elseif event == "timer" and timer == timeoutTimer then return "timeout" end
+    end
+end
+
+local queuedPackets = {}
+return {
+    packet = function(data, port) return packetInternal(data, port) end,
+    hasModem = function() return modem and true end,
+
+    connect = function(ip, port)
+        checkForModem(); while openPort == port do openPort = math.random(65530) end
+        connectedIP, connectedPort = ip, port; modem.open(openPort); packetInternal("connect")
+        if packetInternal() == "success" then return true end; 
+        connectedIP, connectedPort = nil, nil; modem.close(openPort)
+    end,
+
+    disconnect = function()
+        checkForModem(); Client.packet("disconnect"); modem.closeAll()
+    end,
+
+    pause = function(pause) if isBool(pause) then paused = pause else return paused end end,
+    inGame = function(isInGame) if isBool(isInGame) then inGame = isInGame else return inGame end end,
+    singleplayer = function(isSingleplayer) if isBool(isSingleplayer) then singleplayer = isSingleplayer else return singleplayer end end,
+    getMods = function() return loadedMods end
+}

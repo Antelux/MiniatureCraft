@@ -1,0 +1,12 @@
+local TimerFunctions, smt, time = {}, setmetatable, os.time; TimerFunctions.__index = TimerFunctions
+local function correctTimer(timer)
+    local currentTime = time()
+    if currentTime - timer[2] < 0 then timer[3] = timer[3] + (24 - timer[2]); timer[2] = currentTime end
+end
+
+TimerFunctions.passed  = function(self) correctTimer(self); return ((time() - self[2]) + self[3]) * 50 end
+TimerFunctions.wentOff = function(self) correctTimer(self); return self[1] <= ((time() - self[2]) + self[3]) * 50 end
+TimerFunctions.restart = function(self) self[2], self[3] = time(), 0 end
+-- Maybe add Timer.start() and Timer.stop() ?
+
+return {new = function(timer) return smt({timer, time(), 0}, TimerFunctions) end}

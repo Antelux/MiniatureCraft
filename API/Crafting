@@ -1,99 +1,92 @@
-local craftingTables = {}
+local craftingTables = {
+	[13] = { -- Crafting Table
+		[0] = "CRAFTING", 
+		-- Weapons & Tools
+	   	[100] = {1, 68, 2, 226, 1}, -- Wooden Sword
+		[101] = {1, 68, 3, 226, 2}, -- Wooden Pickaxe
+		[102] = {1, 68, 3, 226, 2}, -- Wodden Axe
+		[103] = {1, 68, 1, 226, 2}, -- Wooden Shovel
+		[104] = {1, 68, 2, 226, 2}, -- Wooden Hoe
 
-_G.Crafting = {}
+		[105] = {1, 1, 2, 226, 1}, -- Stone Sword
+		[106] = {1, 1, 3, 226, 2}, -- Stone Pickaxe
+		[107] = {1, 1, 3, 226, 2}, -- Stone Axe
+		[109] = {1, 1, 2, 226, 2}, -- Stone Hoe
+		--[151] = {1, 226, 3, 242, 3}, -- Bow
+	
+		-- Blocks
+		[13] = {1, 68, 4}, -- Crafting Table
+		[14] = {1, 1, 8}, -- Furnace
+		[20] = {1, 1, 8}, -- Oven
+		[19] = {1, 16, 3, 216, 4}, -- Anvil
+		[34] = {1, 68, 6}, -- Door
 
-function Crafting.setCraftingTable(id, name, x, y, w, h) 
-  craftingTables[#craftingTables + 1] = {Name = name, ID = id, Recipes = {}, Size = {x, y, w, h}} 
-end
+		[15] = {1, 213, 9}, -- Coal Block
+		[16] = {1, 216, 9}, -- Iron Block
+		[17] = {1, 217, 9}, -- Gold Block
+		[18] = {1, 218, 9}, -- Gem Block
+		--[24] = {1, 235, 9}, -- Redstone Block
 
-function Crafting.getCraftingTables() return craftingTables end
-function Crafting.isCraftingTable(id)
-  if type(id) ~= "number" then return end
-  for i = 1, #craftingTables do if craftingTables[i].ID == id then return i end end
-end
+		-- Light Sources
+		[22] = {1, 220, 4, 216, 2, 29, 1}, -- Lantern
+		[29] = {4, 226, 1, 213, 1}, -- Torch
+		[30] = {1, 222, 4}, -- Glowstone
+	
+		-- Tiles
+		[68] = {4, 2, 1}, -- Wooden Planks
+		[67] = {4, 1, 1}, -- Stone Tiles
 
-function Crafting.setRecipe(id, output, outputAmount, input)
-  local craftingTables = Crafting.getCraftingTables()
-  local tableID = Crafting.isCraftingTable(id)
-  if tableID then craftingTables[tableID].Recipes[#craftingTables[tableID].Recipes + 1] = {Input = input, Output = {output, outputAmount}} end
-end
+		-- Items
+		[241] = {16, 216, 4}, -- Chains
+		[242] = {4, 221, 1}, -- String
+		[226] = {4, 68, 2} -- Sticks
+	},
 
---[Crafting Table]-- (Disabled recipes are items that cannot be used at the moment.)
-Crafting.setCraftingTable(13, "CRAFTING", 2, 4, 18, 14)
+	[14] = { -- Furnace
+		[0] = "SMELTING",
+	   	[216] = {1,	9, 1, 213, 1}, -- Iron
+		[217] = {1, 10, 1, 213, 1}, -- Gold
+		[220] = {1,	56, 1, 213, 1} -- Glass
+	},
 
--- Tools
-Crafting.setRecipe(13, 100, 1, {68, 2, 226, 1}) -- Wooden Sword
-Crafting.setRecipe(13, 101, 1, {68, 3, 226, 2}) -- Wooden Pickaxe
-Crafting.setRecipe(13, 102, 1, {68, 3, 226, 2}) -- Wodden Axe
-Crafting.setRecipe(13, 103, 1, {68, 1, 226, 2}) -- Wooden Shovel
-Crafting.setRecipe(13, 104, 1, {68, 2, 226, 2}) -- Wooden Hoe
+	[19] = { -- Anvil
+		[0] = "ANVIL",
+		-- Weapons & Tools
+		[110] = {1, 216, 2, 226, 1}, -- Iron Sword
+		[111] = {1, 216, 3, 226, 2}, -- Iron Pickaxe
+		[112] = {1, 216, 3, 226, 2}, -- Iron Axe
+		[113] = {1, 216, 1, 226, 2}, -- Iron Shovel
+		[114] = {1, 216, 2, 226, 2}, -- Iron Hoe
 
-Crafting.setRecipe(13, 105, 1, {1, 2, 226, 1}) -- Stone Sword
-Crafting.setRecipe(13, 106, 1, {1, 3, 226, 2}) -- Stone Pickaxe
-Crafting.setRecipe(13, 107, 1, {1, 3, 226, 2}) -- Stone Axe
-Crafting.setRecipe(13, 108, 1, {1, 1, 226, 2}) -- Stone Shovel
-Crafting.setRecipe(13, 109, 1, {1, 2, 226, 2}) -- Stone Hoe
+		[115] = {1, 217, 2, 226, 1}, -- Gold Sword
+		[116] = {1, 217, 3, 226, 2}, -- Gold Pickaxe
+		[117] = {1, 217, 3, 226, 2}, -- Gold Axe
+		[118] = {1, 217, 1, 226, 2}, -- Gold Shovel
+		[119] = {1, 217, 2, 226, 2}, -- Gold Hoe
 
--- Crafting.setRecipe(13, 151, 1, {226, 3, 242, 3}) -- Bow
+		[120] = {1, 218, 2, 226, 1}, -- Gem Sword
+		[121] = {1, 218, 3, 226, 2}, -- Gem Pickaxe
+		[122] = {1, 218, 3, 226, 2}, -- Gem Axe
+		[123] = {1, 218, 1, 226, 2}, -- Gem Shovel
+		[124] = {1, 218, 2, 226, 2}  -- Gem Hoe
+	},
 
--- Blocks
-Crafting.setRecipe(13, 13, 1, {2, 4}) -- Crafting Table
-Crafting.setRecipe(13, 14, 1, {1, 8}) -- Furnace
-Crafting.setRecipe(13, 20, 1, {1, 8}) -- Oven
-Crafting.setRecipe(13, 19, 1, {238, 3, 216, 4}) -- Anvil
+	[20] = { -- Oven
+		[0] = "COOKING",
+		[209] = {1, 208, 3, 213, 1}, -- Bread
+		[212] = {1, 211, 1, 213, 1}, -- Cooked Beef
+		[234] = {1, 233, 1, 213, 1}, -- Cooked Pork
+		[232] = {1, 231, 1, 213, 1}, -- Baked Carrot
+		[230] = {1, 229, 1, 213, 1}  -- Baked Potato
+	}
+}
 
--- Light Sources
-Crafting.setRecipe(13, 22, 1, {220, 4, 216, 2, 29, 1}) -- Lantern
-Crafting.setRecipe(13, 30, 1, {222, 4}) -- Glowstone
-Crafting.setRecipe(13, 29, 4, {226, 1, 213, 1}) -- Torch
+-- x, y, w, h = 2, 4, 18, 14
 
-Crafting.setRecipe(13, 15, 1, {213, 9}) -- Coal Block
-Crafting.setRecipe(13, 16, 1, {216, 9}) -- Iron Block
-Crafting.setRecipe(13, 17, 1, {217, 9}) -- Gold Block
-Crafting.setRecipe(13, 18, 1, {218, 9}) -- Gem Block
--- Crafting.setRecipe(13, 24, 1, {235, 9}) -- Redstone Block
-
--- Tiles
-Crafting.setRecipe(13, 68, 4, {2, 1}) -- Wooden Planks
-Crafting.setRecipe(13, 67, 4, {1, 1}) -- Stone Tiles
-
--- Items
-Crafting.setRecipe(13, 226, 4, {68, 2}) -- Sticks
-Crafting.setRecipe(13, 241, 16, {216, 4}) -- Chains
-Crafting.setRecipe(13, 242, 4, {221, 1}) -- String
-
---[Furnace]--
-Crafting.setCraftingTable(14, "SMELTING", 2, 4, 18, 14)
-Crafting.setRecipe(14, 216, 1, {9, 1, 213, 1}) -- Iron
-Crafting.setRecipe(14, 217, 1, {10, 1, 213, 1}) -- Gold
-Crafting.setRecipe(14, 220, 1, {56, 1, 213, 1})-- Glass
-
---[Anvil]--
-Crafting.setCraftingTable(19, "ANVIl", 2, 4, 18, 14)
-
--- Tools
-Crafting.setRecipe(19, 110, 1, {216, 2, 226, 1}) -- Iron Sword
-Crafting.setRecipe(19, 111, 1, {216, 3, 226, 2}) -- Iron Pickaxe
-Crafting.setRecipe(19, 112, 1, {216, 3, 226, 2}) -- Iron Axe
-Crafting.setRecipe(19, 113, 1, {216, 1, 226, 2}) -- Iron Shovel
-Crafting.setRecipe(19, 114, 1, {216, 2, 226, 2}) -- Iron Hoe
-
-Crafting.setRecipe(19, 115, 1, {217, 2, 226, 1}) -- Gold Sword
-Crafting.setRecipe(19, 116, 1, {217, 3, 226, 2}) -- Gold Pickaxe
-Crafting.setRecipe(19, 117, 1, {217, 3, 226, 2}) -- Gold Axe
-Crafting.setRecipe(19, 118, 1, {217, 1, 226, 2}) -- Gold Shovel
-Crafting.setRecipe(19, 119, 1, {217, 2, 226, 2}) -- Gold Hoe
-
-Crafting.setRecipe(19, 120, 1, {218, 2, 226, 1}) -- Gem Sword
-Crafting.setRecipe(19, 121, 1, {218, 3, 226, 2}) -- Gem Pickaxe
-Crafting.setRecipe(19, 122, 1, {218, 3, 226, 2}) -- Gem Axe
-Crafting.setRecipe(19, 123, 1, {218, 1, 226, 2}) -- Gem Shovel
-Crafting.setRecipe(19, 124, 1, {218, 2, 226, 2}) -- Gem Hoe
-
---[ Oven ]--
-Crafting.setCraftingTable(20, "COOKING", 2, 4, 18, 14)
-Crafting.setRecipe(20, 209, 1, {208, 3, 213, 1}) -- Bread
-Crafting.setRecipe(20, 212, 1, {211, 1, 213, 1}) -- Cooked Beef
-Crafting.setRecipe(20, 234, 1, {233, 1, 213, 1}) -- Cooked Pork
-Crafting.setRecipe(20, 232, 1, {231, 1, 213, 1}) -- Baked Carrot
-Crafting.setRecipe(20, 230, 1, {229, 1, 213, 1}) -- Baked Potato
+return {
+	setRecipe        = function(id, outputid, outputAmount, input) craftingTables[id][outputid] = {outputAmount, unpack(input)} end,
+	setCraftingTable = function(id, name) craftingTables[id] = {[0] = name}  end,
+	isCraftingTable  = function(id)       return craftingTables[id] and true end,
+	playerCanCraft   = function(player, id, amount) end, -- Maybe move these functions to the Player API?
+	playerCraft      = function(player, id, amount) end  -- See Above ^^^
+}

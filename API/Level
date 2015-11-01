@@ -1,601 +1,169 @@
-_G.Level = {}
-local Assets = File.loadAssets()
-local OffsetX, OffsetY = 0, 0
-local currentWorld
-local lightingMap = {}
-local currentTime = math.random(8, 12)
-local spawnPoint = {}
-local isSingleplayer = true
-local ingame = false
+local Assets = require "Assets"
+local Noise = require "API/Noise"
+local Time, Spawn, WorldName = math.random(8, 12), {}
+local Seed = math.random(os.time() * 1000000)
+local Chunks, chunks_cache = {[-3] = {}, [-2] = {}, [-1] = {}, [0] = {}, [1] = {}}, {}
+local Asset_Cache = {}; for k, v in pairs(Assets) do if type(v) == "number" then Asset_Cache[v.name] = k end end
+local random, randomseed, floor = math.random, math.randomseed, math.floor
+local Noise_FBM = Noise.FBM
+local remove = table.remove
+local ty = type
 
-local function mapLoop(world, dim, func, sx, sy, ex, ey)
-  if not world or not world[dim] then return end
-  local sx = sx or 1
-  local ex = ex or world["size"][1]
-  local sy = sy or 1
-  local ey = ey or world["size"][2] 
+local function isString(s) return ty(s) == "string"  end
+local function isNumber(n) return ty(n) == "number"  end
+local function isBool(b)   return ty(b) == "boolean" end
+local function isTable(t)  return ty(t) == "table"   end
+local function isNil(n)    return ty(n) == "nil"     end
 
-  for x = sx, ex do 
-    for y = sy, ey do
-      func(x, y, {["left"] = world[dim][x - 1][y], 
-                  ["right"] = world[dim][x + 1][y], 
-                  ["up"] = world[dim][x][y - 1], 
-                  ["down"] = world[dim][x][y + 1], 
-                  ["center"] = world[dim][x][y], 
-                  ["upleft"] = world[dim][x - 1][y - 1], 
-                  ["upright"] = world[dim][x + 1][y - 1], 
-                  ["downleft"] = world[dim][x - 1][y + 1],
-                  ["downright"] = world[dim][x + 1][y + 1]}, world) 
+local function unloadChunkInternal(dim, x, y, rem)
+    if not Chunks[dim][y] or not Chunks[dim][y][x] then return end
+    local currentChunk = Chunks[dim][y][x]
+    if currentChunk.save then
+
     end
-  end
-  os.queueEvent("yield")
-  os.pullEvent("yield")
-
-  return world
+    if rem then remove(chunks_cache, currentChunk.cache_id) end
+    Chunks[dim][y][x] = nil
 end
 
-local function mapBrush(world, dim, x, y, asset, size)
-  local sizeModifier = math.random(size) 
+local function updateChunkInternal(dim, x, y)
+    local cx, cy = floor((x - 1) * 0.0625), floor((y - 1) * 0.0625)
+    if not Chunks[dim][cy] or not Chunks[dim][cy][cx] then return end
+    local currentChunk = Chunks[dim][cy][cx]
+    local xc, yc = x - (cx * 16), y - (cy * 16)
+    local center = currentChunk[yc][xc]
 
-  for radius = 1, size, 0.1 do
-    local radStep = 1 / (sizeModifier * radius)
-    for angle = 1, math.pi + radStep, radStep do
-      local pX = (math.cos(angle) * radius * sizeModifier) + math.random(-0.5, 0.5)
-      local pY = (math.sin(angle) * radius) + math.random(-0.5, 0.5)
-      for i = -1, 1, 2 do
-        for j = -1, 1, 2 do
-          if asset.Block then 
-            if #Assets[asset.Block].texture > 3 then world[dim][math.floor(x + i * pX)][math.floor(y + j * pY)].Block = {ID = asset.Block, currentAnimation = math.random(#Assets[asset.Block].texture / 3), totalAnimation = #Assets[asset.Block].texture / 3} 
-            else world[dim][math.floor(x + i * pX)][math.floor(y + j * pY)].Block = {ID = asset.Block} end
-          elseif asset.Block == false then world[dim][math.floor(x + i * pX)][math.floor(y + j * pY)].Block = {ID = false} end
-
-          if asset.Tile then 
-            if #Assets[asset.Tile].texture > 3 then world[dim][math.floor(x + i * pX)][math.floor(y + j * pY)].Tile = {ID = asset.Tile, currentAnimation = math.random(#Assets[asset.Tile].texture / 3), totalAnimation = #Assets[asset.Tile].texture / 3} 
-            else world[dim][math.floor(x + i * pX)][math.floor(y + j * pY)].Tile = {ID = asset.Tile} end
-          elseif asset.Tile == false then world[dim][math.floor(x + i * pX)][math.floor(y + j * pY)].Tile = {ID = false} end
+    for y = 1, 16 do
+        for x = 1, 16 do
+            local tileTick = Assets[center[1]].tick or function(c) return c end
+            local blockTick = Assets[center[5]] and Assets[center[5]].tick or function(c) return c end
+            Chunks[dim][cy][cx] = tileTick(currentChunk, dim, xc, yc)
+            Chunks[dim][cy][cx] = blockTick(currentChunk, dim, xc, yc)
         end
-      end
     end
-  end
-
-  return world
 end
 
-local function addLightPoint(dim, x, y, sym)
-  local sym = sym or true
-  local x, y = math.floor(x), math.floor(y)
-  if type(dim) ~= "number" or type(x) ~= "number" or type(y) ~= "number" then return end
-  if lightingMap[dim] and lightingMap[dim][x] and lightingMap[dim][x][y] and type(lightingMap[dim][x][y]) == "boolean" then return end
-  lightingMap[dim] = lightingMap[dim] or {}
-  lightingMap[dim][x] = lightingMap[dim][x] or {}
-  lightingMap[dim][x][y] = sym
-end
+return {
+    loadChunk = function(dim, x, y)
+        if Chunks[dim][y] and Chunks[dim][y][x] then return end
+        local cx, cy = x * 16, y * 16
+        local cache_id = #chunks_cache + 1
+        local newChunk = {save = false, cache = cache_id}
+        
+        -- Have a table of all lights and their radius in the world
+        -- Ex: {{x, y, r}, {x, y, r}, ...}
+        -- Draw accordingly in main loop
 
--- The following functions "addLightRing" and "addLight" are modified functions from the CCGL.
--- Credits to Bobby Lucero for writing such a neat program!
-local function addLightRing(dim, xm, ym, r, sym)
-  local rx, ry = r, r * 0.7
-  local rxSq, rySq = rx * rx, ry * ry
-  local x, y = 0, ry
-  local px, py = 0, 2 * rxSq * y
-       
-  addLightPoint(dim, xm + x, ym + y, sym)
-  addLightPoint(dim, xm - x, ym + y, sym)
-  addLightPoint(dim, xm + x, ym - y, sym)
-  addLightPoint(dim, xm - x, ym - y, sym)
- 
-  local p = rySq - (rxSq * ry) + (0.25 * rxSq)
-  while (px < py) do
-      x = x + 1
-      px = px + 2 * rySq
-      if (p < 0) then
-          p = p + rySq + px
-      else
-          y = y - 1
-          py = py - 2 * rxSq;
-          p = p + rySq + px - py;
-      end
-      addLightPoint(dim, xm + x, ym + y, sym)
-      addLightPoint(dim, xm - x, ym + y, sym)
-      addLightPoint(dim, xm + x, ym - y, sym)
-      addLightPoint(dim, xm - x, ym - y, sym)
-  end
- 
-  local p = rySq*(x+0.5)*(x+0.5) + rxSq*(y-1)*(y-1) - rxSq*rySq
- 
-  while (y > 0) do
-      y = y - 1
-      py = py - 2 * rxSq
-      if (p > 0) then
-          p = p + rxSq - py
-      else
-          x = x + 1
-          px = px + 2 * rySq
-          p = p + rxSq - py + px
-      end
-     
-      addLightPoint(dim, xm + x, ym + y, sym)
-      addLightPoint(dim, xm - x, ym + y, sym)
-      addLightPoint(dim, xm + x, ym - y, sym)
-      addLightPoint(dim, xm - x, ym - y, sym)
-  end
-end
+        if dim == 0 then
+            for y = 1, 16 do
+                newChunk[y] = {}
+                for x = 1, 16 do
+                    local elevation = Noise_FBM(8, cx + x, cy + y, 0.5, .007)
+                    randomseed(elevation * 100000000 + (x*y))--; random(); random(); random()
 
-local function addLight(dim, xm, ym, r, sym)
-  --local h, w = (r + 1.2) * 0.7, (r + 1.5)
-  local h, w = r * 0.7, r 
-  local hh, ww, x0, dx = h * h, w * w, w, 0
-  local hhww = hh*ww
-  for x = -w, w do addLightPoint(dim, xm + x, ym) end  
-
-  for y = 1, h do
-    x1 = x0 - (dx - 1)
-    for i = x1, 0, -1 do
-      if (x1*x1*hh + y*y*ww <= hhww) then break end
-      x1 = x1 - 1
-    end
-    dx, x0 = x0 - x1, x1
-    for x = -x0, x0 do
-      addLightPoint(dim, xm + x, ym - y)
-      addLightPoint(dim, xm + x, ym + y)
-    end
-  end
-
-  --addLightRing(dim, xm, ym, r, "*")
-  addLightRing(dim, xm, ym, r, "*")
-  addLightRing(dim, xm, ym, r + 1, "#")
-end
-
-function Level.getTexture(dim, x, y, useAnimations)
-  if type(dim) ~= "number" or type(x) ~= "number" or type(6) ~= "number" then return end
-
-  local useAnimations = useAnimations or true
-  local tile = currentWorld[dim][x][y].Tile
-  local block = currentWorld[dim][x][y].Block
-  local length, width = currentWorld["size"][1], currentWorld["size"][2]
-
-  if type(block.ID) == "number" and Assets[block.ID] then
-    if block.currentAnimation and useAnimations then
-      if block.animationSpeed then 
-        block.animationSpeed = block.animationSpeed + 1
-        if block.animationSpeed == Assets[block.ID].animationSpeed then
-          block.animationSpeed = 0
-          block.currentAnimation = block.currentAnimation + 1
-          if block.currentAnimation > block.totalAnimation then block.currentAnimation = 1 end
-        end
-      else
-        block.currentAnimation = block.currentAnimation + 1
-        if block.currentAnimation > block.totalAnimation then block.currentAnimation = 1 end
-      end
-      currentWorld[dim][x][y].Block = block
-
-      -- Background Color, Foreground Color, Foreground Character
-      return Assets[block.ID].texture[(block.currentAnimation * 2) + (block.currentAnimation - 2)] or Assets[tile.ID].texture[1], Assets[block.ID].texture[(block.currentAnimation * 2) + (block.currentAnimation - 2) + 1] or Assets[tile.ID].texture[2], Assets[block.ID].texture[(block.currentAnimation * 2) + (block.currentAnimation - 2) + 2] or Assets[tile.ID].texture[3]
-    else
-      return Assets[block.ID].texture[1] or Assets[tile.ID].texture[1], Assets[block.ID].texture[2] or Assets[tile.ID].texture[2], Assets[block.ID].texture[3] or Assets[tile.ID].texture[3]
-    end
-
-  elseif type(tile.ID) == "number" and Assets[tile.ID] then
-    if tile.currentAnimation and useAnimations then
-      if tile.animationSpeed then 
-        tile.animationSpeed = tile.animationSpeed + 1
-        if tile.animationSpeed == Assets[tile.ID].animationSpeed then
-          tile.animationSpeed = 0
-          tile.currentAnimation = tile.currentAnimation + 1
-          if tile.currentAnimation > tile.totalAnimation then tile.currentAnimation = 1 end
-        end
-      else
-        tile.currentAnimation = tile.currentAnimation + 1
-        if tile.currentAnimation > tile.totalAnimation then tile.currentAnimation = 1 end
-      end
-      currentWorld[dim][x][y].Tile = tile
-
-      -- Background Color, Foreground Color, Foreground Character
-      return Assets[tile.ID].texture[(tile.currentAnimation * 2) + (tile.currentAnimation - 2)], Assets[tile.ID].texture[(tile.currentAnimation * 2) + (tile.currentAnimation - 2) + 1], Assets[tile.ID].texture[(tile.currentAnimation * 2) + (tile.currentAnimation - 2) + 2]
-    else
-      return Assets[tile.ID].texture[1], Assets[tile.ID].texture[2], Assets[tile.ID].texture[3]
-    end
-  end
-end
-
-function Level.setInGame(inG) if type(inG) == "boolean" then ingame = inG end end
-function Level.isInGame() return ingame end
-function Level.setSingleplayer(isSP) if type(isSP) == "boolean" then isSingleplayer = isSP end end
-function Level.isSingleplayer() return isSingleplayer end
-function Level.getLightingMap() return lightingMap end
-function Level.setTime(newTime) if type(newTime) == "number" and newTime >= 0 and newTime <= 24 then currentTime = newTime end end
-function Level.getTime() return currentTime end
-function Level.setWorld(world) if type(world) == "table" then currentWorld = world end end -- Sets the current map
-function Level.getWorld() return currentWorld end -- Gets the current map
-function Level.getSize() return unpack(currentWorld["size"]) end
-function Level.setSpawnPoint(newSpawn) if type(newSpawn) == "table" then spawnPoint = newSpawn end end
-function Level.getSpawnPoint() return spawnPoint end
-
-function Level.updateArea(dimension, sx, sy, ex, ey)
-  local players = Player.getNames()
-  local dimensions = {}
-  lightingMap = {}; lightingMap[1] = false
-
-  if ingame then
-    for i = 1, #players do
-      if Player.isAlive(players[i]) then
-        local lightedArea, playerDimension = 5, Player.getDimension(players[i])
-
-        if playerDimension == 0 then
-          if currentTime >= 20 then lightedArea = 5
-          elseif currentTime >= 19.5 then lightedArea = 30 - ((currentTime - 19.5) * 50) 
-          elseif currentTime >= 7 then lightedArea = false; lightingMap[0] = false
-          elseif currentTime >= 6.5 then lightedArea = lightedArea + ((currentTime - 6.5) * 45) end
+                        if elevation <= .33 then newChunk[y][x] = {51, random(2), random(0, 5) * 0.1} -- Water
+                    elseif elevation <= .36 then newChunk[y][x] = {56} -- Sand
+                    elseif elevation <= .6  then newChunk[y][x] = {50, _, _, _, random(20) == 1 and random(26, 28) or nil} -- Grass / Flowers
+                    elseif elevation <= .7  then newChunk[y][x] = {69} -- Snow
+                    else newChunk[y][x] = {55, _, _, _, random(20) <= 18 and 1 or 8} end -- Stone/Coal Ore with dirt
+                end
+            end
         end
 
-        if not dimensions[playerDimension] then
-          if not (playerDimension == 0 and lightingMap[0] == false) or not playerDimension == 1 then 
-            dimensions[playerDimension] = true 
-          end
+        chunks_cache[cache_id] = {dim, x, y}
+        Chunks[dim][y] = Chunks[dim][y] or {}; Chunks[dim][y][x] = newChunk
+    end,
+
+    unloadChunk = function(dim, x, y)
+        if not isNumber(x) or not isNumber(y) then
+            for i = 1, #chunks_cache do
+                local current_cache = chunks_cache[i]
+                if current_cache[1] == dim then
+                    unloadChunkInternal(current_cache[1], current_cache[2], current_cache[3])
+                end
+            end
+        end
+        unloadChunkInternal(dim, x, y, true)
+    end,
+
+    updateChunk = function(dim, x, y)
+        if not isNumber(x) or not isNumber(y) then
+            
+        end
+        updateChunkInternal(dim, x, y)
+    end,
+
+    chunkIsLoaded = function(dim, x, y)
+        return Chunks[dim][y] and Chunks[dim][y][x]
+    end,
+
+    -- You need to load the chunk you're accessing before using the functions getTexture, setData, and getData.
+    getTexture = function(dim, x, y)
+        local cx, cy = floor((x - 1) * 0.0625), floor((y - 1) * 0.0625)
+        if not Chunks[dim][cy] or not Chunks[dim][cy][cx] then return 32768, 1, " " end
+        local spot = Chunks[dim][cy][cx][y - (cy * 16)][x - (cx * 16)]; if not spot then return 32768, 1, " " end
+
+        local function getTileTexture()
+            local tile = Assets[spot[1]]
+            local tileTexture = tile.texture
+            if not spot[3] then return tileTexture[1], tileTexture[2], tileTexture[3] else
+                spot[3] = spot[3] + 0.05; if spot[3] > tile.animationSpeed then spot[2], spot[3] = spot[2] + 1, 0 end
+                if spot[2] > #tileTexture / 3 then spot[2] = 1 end; local aoff = (spot[2] - 1) * 3
+                return tileTexture[1 + aoff], tileTexture[2 + aoff], tileTexture[3 + aoff]
+            end
         end
 
-        if lightedArea and playerDimension ~= 1 then
-          local px, py = Player.getCoordinates(players[i])
-          addLight(playerDimension, px, py, lightedArea) 
+        local block = Assets[spot[5]]
+        if block then 
+            local blockTexture, blockTimer = block.texture, spot[7]
+            if not blockTimer then return blockTexture[1] or getTileTexture(), blockTexture[2], blockTexture[3] else
+                spot[7] = spot[7] + 0.05; if spot[7] > block.animationSpeed then spot[6], spot[7] = spot[6] + 1, 0 end
+                if spot[6] > #blockTexture / 3 then spot[6] = 1 end; local aoff = (spot[6] - 1) * 3
+                return blockTexture[1 + aoff] or getTileTexture(), blockTexture[2 + aoff], blockTexture[3 + aoff]
+            end
+        end 
+
+        return getTileTexture()
+    end,
+
+    --    1            2                3              4        5            6                7                 8           9
+    -- {tileID, tileAnimation, tileAnimationTimer, tileData, blockID, blockAnimation, blockAnimationTimer, blockHealth, blockData}
+    data = function(dim, x, y, tileID, tileData, blockID, blockData)
+        local cx, cy = floor((x - 1) * 0.0625), floor((y - 1) * 0.0625)
+        if not Chunks[dim][cy] or not Chunks[dim][cy][cx] then return end
+        local spot = Chunks[dim][cy][cx][y - (cy * 16)][x - (cx * 16)]
+
+        if (not tileID and not tileData and isNil(blockID) and not blockData) or not spot then return spot end
+        if isNumber(tileID) then 
+            local tile = Assets[tileID]; if not tile then return end; local speed = tile.animationSpeed 
+            spot[1] = tileID or spot[1]; spot[2] = 1; spot[3] = speed and random(0, speed*10) * 0.1; spot[4] = tileData or spot[4]
         end
-      end
-    end
-  end
+        if isNumber(blockID) then 
+            local block = Assets[blockID]; if not block  then return end; local speed = block.animationSpeed
+            spot[5] = blockID or spot[5]; spot[6] = 1; spot[7] = speed and random(0, speed*10) * 0.1; spot[8] = Assets[blockID].health; spot[9] = blockData or spot[9]
+        elseif isBool(blockID) and blockID == false then
+            spot[5] = nil; spot[6] = nil; spot[7] = nil; spot[8] = nil; spot[9] = nil
+        end; spot.save = true
+    end,
 
-  currentWorld = mapLoop(currentWorld, dimension, function(x, y, area) 
-    if not area["center"].Tile.ID then return end
-    -- Covers dirt with grass 
-    if dimension == 0 then
-      if area["center"].Tile.ID == 55 and area["center"].Block.ID == false and (area["left"].Tile.ID == 50 or area["right"].Tile.ID == 50 or area["up"].Tile.ID == 50 or area["down"].Tile.ID == 50) then 
-        if math.random(1000) == 1 then currentWorld[0][x][y].Tile.ID = 50 end
-      end
-    end
+    checkForCollision = function(dim, x, y, banned)
+        local cx, cy = floor((x - 1) * 0.0625), floor((y - 1) * 0.0625)
+        if not Chunks[dim][cy] or not Chunks[dim][cy][cx] then return end
+        local spot = Chunks[dim][cy][cx][y - (cy * 16)][x - (cx * 16)]
+        local block = Assets[spot[5]]; if not spot or (block and block.type == "block") then return true end
+        local tile = spot[1]; if banned then for i = 1, #banned do if banned[i] == tile then return true end end end
+    end,
 
-    -- Runs any scripts a block / tile may have.
-    if Assets[area["center"].Block.ID] and Assets[area["center"].Block.ID].script then File.runScript(Assets[area["center"].Block.ID].script(dimension, x, y)) end
-    if Assets[area["center"].Tile.ID] and Assets[area["center"].Tile.ID].script then File.runScript(Assets[area["center"].Tile.ID].script(dimension, x, y)) end
+    convertID = function(id)
+        return (isString(id) and Asset_Cache[id]) or isNumber(id) and Assets[id] and Assets[id].name 
+    end,
 
-    -- Updates the lightingMap
-    
-    -- Lets liquids "flow" into hole tiles
-    if Assets[area["center"].Tile.ID].type == "liquid" then 
-      if area["left"].Tile.ID == 57 then currentWorld[0][x - 1][y] = {Tile = {ID = area["center"].Tile.ID, currentAnimation = math.random(#Assets[area["center"].Tile.ID].texture / 3), totalAnimation = #Assets[area["center"].Tile.ID].texture / 3}, Block = {ID = false}} end
-      if area["right"].Tile.ID == 57 then currentWorld[0][x + 1][y] = {Tile = {ID = area["center"].Tile.ID, currentAnimation = math.random(#Assets[area["center"].Tile.ID].texture / 3), totalAnimation = #Assets[area["center"].Tile.ID].texture / 3}, Block = {ID = false}} end
-      if area["up"].Tile.ID == 57 then currentWorld[0][x][y - 1] = {Tile = {ID = area["center"].Tile.ID, currentAnimation = math.random(#Assets[area["center"].Tile.ID].texture / 3), totalAnimation = #Assets[area["center"].Tile.ID].texture / 3}, Block = {ID = false}} end
-      if area["down"].Tile.ID == 57 then currentWorld[0][x][y + 1] = {Tile = {ID = area["center"].Tile.ID, currentAnimation = math.random(#Assets[area["center"].Tile.ID].texture / 3), totalAnimation = #Assets[area["center"].Tile.ID].texture / 3}, Block = {ID = false}} end
-    end
-  end, sx, sy, ex, ey)
+    loadStructure = function(file, name)
+        if not fs.exists(file) then return end
 
-  if ingame then
-    for dim in pairs(dimensions) do
-      mapLoop(currentWorld, dim, function(x, y, area) 
-        if Assets[area["center"].Block.ID] and Assets[area["center"].Block.ID].lightSource then addLight(dim, x, y, Assets[area["center"].Block.ID].lightSource, " ") end
-        if Assets[area["center"].Tile.ID] and Assets[area["center"].Tile.ID].lightSource then addLight(dim, x, y, Assets[area["center"].Tile.ID].lightSource, " ") end
-      end, sx, sy, ex, ey)
-    end
-  end
-end
+    end,
 
--- Returns true if the id exists 
-function Level.convertID(ID) 
-  if type(ID) ~= "number" and type(ID) ~= "string" then return end
-  for i = 1, table.maxn(Assets) do
-    if type(ID) == "number" and Assets[i] ~= nil and i == ID then return Assets[i].name end
-    if type(ID) == "string" and Assets[i] ~= nil and Assets[i].name == ID then return i end
-  end
-end
-
--- Checks if the player stand here without intersecting any blocks / tiles.
-function Level.checkForCollision(dim, x, y, banned)
-  if type(dim) ~= "number" or type(x) ~= "number" or type(y) ~= "number" then return end
-  local banned = banned or {}; banned[#banned + 1] = 64
-  local Block = Assets[Level.getData(dim, x, y).Block.ID]
-  for i = 1, #banned do if Level.getData(dim, x, y).Tile.ID == banned[i] then return true end end
-  if Block and Block.type == "block" then return true end
-end
-
--- Sets the ID of a tile and/or block at a specific point.
-function Level.setData(dim, x, y, newData)
-  if type(newData) ~= "table" then return end
-  local currentBlock, currentTile
-  if currentWorld[dim] and currentWorld[dim][x] and currentWorld[dim][x][y] then
-    currentBlock, currentTile = currentWorld[dim][x][y].Block, currentWorld[dim][x][y].Tile
-  else return end
-  
-  if newData.Block and newData.Block.ID then
-    if type(newData.Block.ID) == "string" then newData.Block.ID = tonumber(newData.Block.ID) end
-    if #Assets[newData.Block.ID].texture > 3 then
-      newData.Block.currentAnimation = math.random(#Assets[newData.Block.ID].texture / 3)
-      newData.Block.totalAnimation = #Assets[newData.Block.ID].texture / 3
-      if Assets[newData.Block.ID].animationSpeed then
-        newData.Block.animationSpeed = 0
-      end
-    end
-  end
-
-  if newData.Tile and newData.Tile.ID then
-    if type(newData.Tile.ID) == "string" then newData.Tile.ID = tonumber(newData.Tile.ID) end
-    if #Assets[newData.Tile.ID].texture > 3 then
-      newData.Tile.currentAnimation = math.random(#Assets[newData.Tile.ID].texture / 3)
-      newData.Tile.totalAnimation = #Assets[newData.Tile.ID].texture / 3
-      if Assets[newData.Tile.ID].animationSpeed then
-        newData.Tile.animationSpeed = 0
-      end
-    end
-  end
-  currentWorld[dim][x][y] = {Block = newData.Block or currentBlock, Tile = newData.Tile or currentTile}
-end
-
--- Returns the data of a block and tile at a specific point
-function Level.getData(dim, x, y)
-  if type(dim) ~= "number" or type(x) ~= "number" or type(y) ~= "number" then return end
-  return currentWorld[dim][x][y]
-end
-
-function Level.setOffset(x, y)
-  if type(x) == "string" then
-    if string.find(x, "add") then OffsetX = OffsetX + (tonumber(x:sub(4)) or 0) end
-    if string.find(x, "sub") then OffsetX = OffsetX - (tonumber(x:sub(4)) or 0) end
-  elseif type(x) == "number" then OffsetX = x end
-
-  if type(y) == "string" then
-    if string.find(y, "add") then OffsetY = OffsetY + (tonumber(y:sub(4)) or 0) end
-    if string.find(y, "sub") then OffsetY = OffsetY - (tonumber(y:sub(4)) or 0) end
-  elseif type(y) == "number" then OffsetY = y end
-end
-
-function Level.getOffset() return OffsetX, OffsetY end
-
--- Takes in 2 IDs for generation
--- Format: {asset = 10, chance = 10, asset = 20, chance = 90}
-function Level.chance(blockTable, totalPercent)
-  local randomNumber = math.random(totalPercent or 100)
-  local asset = false
-
-  local chanceTable = {}
-  for i = 1, #blockTable / 2 do chanceTable[i] = blockTable[i * 2] end
-
-  table.sort(chanceTable, function(a, b) return a > b end)
-  for i = 1, #chanceTable do
-    if randomNumber <= chanceTable[i] then
-      asset = blockTable[i * 2 - 1]
-    end
-  end
-
-  return asset
-end
-
--- Generates the overworld
-function Level.generateWorld(world)
-  local currentMods, world = File.getLoadedMods(), world
-  -- Generates the Outerworld --------------------------------------------
-  for i = 1, #currentMods do 
-    if currentMods[i].Generation and currentMods[i].Generation[1] and currentMods[i].Generation[1]["before"] then world[1] = currentMods[i].Generation[1]["before"](world[1]) end
-  end
-
-  local world = mapLoop(world, 1, function(x, y, area) world[1][x][y].Tile.ID = 64 end) -- Places Infinite fall tiles
-  local world = mapLoop(world, 1, function(x, y, area, world) -- Adds "clouds"
-    if math.random(750) == 1 then world = mapBrush(world, 1, x, y, {Tile = 65}, math.random(2, 7)) end
-  end)
-  local world = mapLoop(world, 1, function(x, y, area) -- Adds cacti
-    if area["left"].Tile.ID == 65 and area["right"].Tile.ID == 65 and area["up"].Tile.ID == 65 and area["down"].Tile.ID == 65 then 
-      world[1][x][y].Block.ID = Level.chance({4, 95, false, 100})
-    end
-  end)
-
-  for i = 1, #currentMods do 
-    if currentMods[i].Generation and currentMods[i].Generation[1] and currentMods[i].Generation[1]["after"] then world[1] = currentMods[i].Generation[1]["after"](world[1]) end
-  end
-
-  -- Generates the Overworld --------------------------------------------
-  for i = 1, #currentMods do 
-    if currentMods[i].Generation and currentMods[i].Generation[0] and currentMods[i].Generation[0]["before"] then world[0] = currentMods[i].Generation[0]["before"](world[0]) end
-  end
-
-  local world = mapLoop(world, 0, function(x, y, area) world[0][x][y].Tile.ID = Level.chance({55, 99, 50, 100}) end) -- Places Dirt / Grass
-  local world = mapLoop(world, 0, function(x, y, area) world[0][x][y].Block.ID = Level.chance({1, 1}) end) -- Adds stone
-  local world = mapLoop(world, 0, function(x, y, area, world) -- Adds sand
-    if math.random(500) == 1 then world = mapBrush(world, 0, x, y, {Tile = 56}, math.random(2, 5)) end
-  end)
-  local world = mapLoop(world, 0, function(x, y, area) -- Adds water
-    if ((area["left"].Tile.ID == 56 or area["left"].Tile.ID == 51) and (area["right"].Tile.ID == 56 or area["right"].Tile.ID == 51) and (area["up"].Tile.ID == 56 or area["up"].Tile.ID == 51) and (area["down"].Tile.ID == 56 or area["down"].Tile.ID == 51)) or ((area["upleft"].Tile.ID == 56 or area["upleft"].Tile.ID == 51) and (area["upright"].Tile.ID == 56 or area["upright"].Tile.ID == 51) and (area["downleft"].Tile.ID == 56 or area["downleft"].Tile.ID == 51) and (area["downright"].Tile.ID == 56 or area["downright"].Tile.ID == 51)) then 
-      world[0][x][y].Tile = {ID = 51, currentAnimation = math.random(2), totalAnimation = 2}
-    end
-  end)
-  local world = mapLoop(world, 0, function(x, y, area) -- Adds cacti
-    if area["center"].Tile.ID == 56 then 
-      world[0][x][y].Block.ID = Level.chance({4, 95, false, 100})
-    end
-  end)
-  local world = mapLoop(world, 0, function(x, y, area) -- Adds flora
-    if area["left"].Tile.ID == 50 and area["right"].Tile.ID == 50 and area["up"].Tile.ID == 50 and area["down"].Tile.ID == 50 then 
-      world[0][x][y].Block.ID = Level.chance({math.random(26, 28), 95, false, 100})
-    end
-  end)
-  local world = mapLoop(world, 0, function(x, y, area) -- Adds trees
-    if area["center"].Tile.ID == 55 then 
-      world[0][x][y].Block.ID = 2
-      world[0][x][y - 1].Block.ID = 3
-      world[0][x + 1][y - 1].Block.ID = 3
-      world[0][x - 1][y - 1].Block.ID = 3
-      world[0][x][y - 1].Block.ID =  3
-      world[0][x][y - 2].Block.ID = 3
-    end
-  end)
-  local world = mapLoop(world, 0, function(x, y, area, world) -- Adds more stone
-    if math.random(2000) == 1 then world = mapBrush(world, 0, x, y, {Block = 1, Tile = 55}, math.random(3, 5)) end
-  end)
-  local world = mapLoop(world, 0, function(x, y, area) -- Adds Coal
-    if area["left"].Block.ID == 1 and area["right"].Block.ID == 1 and area["up"].Block.ID == 1 and area["down"].Block.ID == 1 then 
-      world[0][x][y].Block = {ID = Level.chance({8, 20}) or 1}
-    end
-  end)
-
-  for i = 1, #currentMods do 
-    if currentMods[i].Generation and currentMods[i].Generation[0] and currentMods[i].Generation[0]["after"] then world[0] = currentMods[i].Generation[0]["after"](world[0]) end
-  end
-
-  -- Generates Upper Caves ------------------------------------
-  for i = 1, #currentMods do 
-    if currentMods[i].Generation and currentMods[i].Generation[-1] and currentMods[i].Generation[-1]["before"] then world[-1] = currentMods[i].Generation[-1]["before"](world[-1]) end
-  end
-
-  local world = mapLoop(world, -1, function(x, y, area) world[-1][x][y].Tile.ID = 55; world[-1][x][y].Block = {ID = 1} end) -- Puts Dirt and stone
-  local world = mapLoop(world, -1, function(x, y, area) -- Adds Coal / Iron
-    if area["left"].Block.ID == 1 or area["right"].Block.ID == 1 or area["up"].Block.ID == 1 or area["down"].Block.ID == 1 then 
-      world[-1][x][y].Block = {ID = Level.chance({8, 85, 9, 91, 1, 100})}
-    end
-  end)
-  local world = mapLoop(world, -1, function(x, y, area, world) -- Removes blocks for caves
-    if math.random(500) == 1 then world = mapBrush(world, -1, x, y, {Block = false}, math.random(3, 6)) end
-  end)
-
-  for i = 1, #currentMods do 
-    if currentMods[i].Generation and currentMods[i].Generation[-1] and currentMods[i].Generation[-1]["after"] then world[-1] = mapLoop(world, -1, currentMods[i].Generation[-1]["after"]) end
-  end
-
-  -- Generates Midpoint ------------------------------------
-  for i = 1, #currentMods do 
-    if currentMods[i].Generation and currentMods[i].Generation[-2] and currentMods[i].Generation[-2]["before"] then world[-2] = mapLoop(world, -2, currentMods[i].Generation[-2]["before"]) end
-  end
-
-  local world = mapLoop(world, -2, function(x, y, area) world[-2][x][y].Tile.ID = 67; world[-2][x][y].Block = {ID = 1} end) -- Puts Dirt and stone
-  local world = mapLoop(world, -2, function(x, y, area) -- Adds Coal / Gold
-    if area["left"].Block.ID == 1 or area["right"].Block.ID == 1 or area["up"].Block.ID == 1 or area["down"].Block.ID == 1 then 
-      world[-2][x][y].Block = {ID = Level.chance({8, 75, 10, 80, 1, 100})}
-    end
-  end)
-  local world = mapLoop(world, -2, function(x, y, area, world) -- Adds dirt
-    if math.random(600) == 1 then world = mapBrush(world, -2, x, y, {Block = false}, math.random(3, 6)) end
-  end)
-
-  for i = 1, #currentMods do 
-    if currentMods[i].Generation and currentMods[i].Generation[-2] and currentMods[i].Generation[-2]["after"] then world[-2] = currentMods[i].Generation[-2]["after"](world[-2]) end
-  end
-
-  -- Generates Lower Caves ------------------------------------
-  for i = 1, #currentMods do 
-    if currentMods[i].Generation and currentMods[i].Generation[-3] and currentMods[i].Generation[-3]["before"] then world[-3] = mapLoop(world, -3, currentMods[i].Generation[-3]["before"]) end
-  end
-
-  local world = mapLoop(world, -3, function(x, y, area) world[-3][x][y].Tile.ID = 67; world[-3][x][y].Block = {ID = 1} end) -- Puts Stone
-  local world = mapLoop(world, -3, function(x, y, area) -- Adds Coal / Iron
-    if area["left"].Block.ID == 1 or area["right"].Block.ID == 1 or area["up"].Block.ID == 1 or area["down"].Block.ID == 1 then 
-      world[-3][x][y].Block = {ID = Level.chance({8, 65, 11, 70, 1, 100})}
-    end
-  end)
-  local world = mapLoop(world, -3, function(x, y, area, world) -- Adds dirt
-    if math.random(700) == 1 then world = mapBrush(world, -3, x, y, {Block = false}, math.random(3, 6)) end
-  end)
-   local world = mapLoop(world, -3, function(x, y, area, world) -- Adds stone tiles
-    if math.random(500) == 1 then world = mapBrush(world, -3, x, y, {Tile = 66, Block = false}, math.random(2, 5)) end
-  end)
-  local world = mapLoop(world, -3, function(x, y, area) -- Adds lava
-    if ((area["left"].Tile.ID == 66 or area["left"].Tile.ID == 61) and (area["right"].Tile.ID == 66 or area["right"].Tile.ID == 61) and (area["up"].Tile.ID == 66 or area["up"].Tile.ID == 61) and (area["down"].Tile.ID == 66 or area["down"].Tile.ID == 61)) or ((area["upleft"].Tile.ID == 66 or area["upleft"].Tile.ID == 61) and (area["upright"].Tile.ID == 66 or area["upright"].Tile.ID == 61) and (area["downleft"].Tile.ID == 66 or area["downleft"].Tile.ID == 61) and (area["downright"].Tile.ID == 66 or area["downright"].Tile.ID == 61)) then 
-      world[-3][x][y] = {Tile = {ID = 61, currentAnimation = math.random(2), totalAnimation = 2}, Block = {ID = false}}
-    end
-  end)
-
-  for i = 1, #currentMods do 
-    if currentMods[i].Generation and currentMods[i].Generation[-3] and currentMods[i].Generation[-3]["after"] then world[-3] = currentMods[i].Generation[-3]["after"](world[-3]) end
-  end
-
-  --[[ Generates the Underworld ------------------------------------
-  local world = mapLoop(world, -4, function(x, y, area) world[-4][x][y].Tile.ID = 66; world[-4][x][y].Block = {ID = 31} end) -- Puts Stone
-
-  local world = mapLoop(world, -4, function(x, y, area, world) -- Adds dirt
-    if math.random(550) == 1 then world = mapBrush(world, -4, x, y, {Block = false}, math.random(4, 6)) end
-  end)
-
-  local world = mapLoop(world, -4, function(x, y, area, world) -- Adds dirt
-    if math.random(450) == 1 then world = mapBrush(world, -4, x, y, {Block = false, Tile = 61}, math.random(4, 6)) end
-  end)
-  --]]
-
-  -- Adds in all the stair cases. These functions are so bad, heres when I start getting lazy ------------------------------------------
-  local function placeStaircase(world, dim, x, y, tileid, blockid, tileid2, blockid2)
-    local blockid = blockid or false
-    local blockid2 = blockid2 or false
-
-    world[dim][x][y] = {Block = {ID = false}, Tile = {ID = 62}}
-    world[dim][x + 1][y] = {Block = {ID = blockid}, Tile = {ID = tileid}}
-    world[dim][x - 1][y] = {Block = {ID = blockid}, Tile = {ID = tileid}}
-    world[dim][x][y + 1] = {Block = {ID = blockid}, Tile = {ID = tileid}}
-    world[dim][x][y - 1] = {Block = {ID = blockid}, Tile = {ID = tileid}}
-    world[dim][x + 1][y + 1] = {Block = {ID = blockid}, Tile = {ID = tileid}}
-    world[dim][x + 1][y - 1] = {Block = {ID = blockid}, Tile = {ID = tileid}}
-    world[dim][x - 1][y + 1] = {Block = {ID = blockid}, Tile = {ID = tileid}}
-    world[dim][x - 1][y - 1] = {Block = {ID = blockid}, Tile = {ID = tileid}}
-
-    world[dim + 1][x][y] = {Block = {ID = false}, Tile = {ID = 63}}
-    world[dim + 1][x + 1][y] = {Block = {ID = blockid2}, Tile = {ID = tileid2}}
-    world[dim + 1][x - 1][y] = {Block = {ID = blockid2}, Tile = {ID = tileid2}}
-    world[dim + 1][x][y + 1] = {Block = {ID = blockid2}, Tile = {ID = tileid2}}
-    world[dim + 1][x][y - 1] = {Block = {ID = blockid2}, Tile = {ID = tileid2}}
-    world[dim + 1][x + 1][y + 1] = {Block = {ID = blockid2}, Tile = {ID = tileid2}}
-    world[dim + 1][x + 1][y - 1] = {Block = {ID = blockid2}, Tile = {ID = tileid2}}
-    world[dim + 1][x - 1][y + 1] = {Block = {ID = blockid2}, Tile = {ID = tileid2}}
-    world[dim + 1][x - 1][y - 1] = {Block = {ID = blockid2}, Tile = {ID = tileid2}}
-
-    return world
-  end
-
-  local function randomStaircase(world, dim, id, id2, id3, id4)
-    local randomX = math.random(world["size"][1])
-    local randomY = math.random(world["size"][2])
-    world = placeStaircase(world, dim, randomX, randomY, id, id2, id3, id4)
-    return world
-  end
-
-  world = randomStaircase(world, 0, 55, 7, 65)
-  world = randomStaircase(world, -1, 55, _, 55, 1)
-  world = randomStaircase(world, -2, 67, _, 55, 1)
-  world = randomStaircase(world, -3, 66, _, 67, 1)
-  return world
-end
-
-function Level.worldBase(length, width, minDim, maxDim)
-  local World = {}
-  for dimension = minDim, maxDim do 
-    World[dimension] = {}
-    for x = -100, length + 100 do
-      World[dimension][x] = {}
-      for y = -100, width + 100 do
-        World[dimension][x][y] = {Block = {ID = false}, Tile = {ID = false}} 
-      end
-    end
-  end
-  Level.setWorld(World)
-end
-
--- Generates a new world.
-function Level.newWorld(length, width)
-  local World = {}
-
-  for dimension = -3, 1 do 
-    World[dimension] = {}
-    for x = -100, length + 100 do
-      World[dimension][x] = {}
-      for y = -100, width + 100 do
-        World[dimension][x][y] = {Block = {ID = false}, Tile = {ID = false}} 
-      end
-    end
-  end
-
-  World["size"] = {length, width}
-
-  local World = Level.generateWorld(World) 
-  --Level.setWorld(World) 
-
-  --[[
-  local loadedMods = File.getLoadedMods()
-  for i = 1, #loadedMods do 
-    if loadedMods[i].Type == "generation" then
-      func = loadedMods[i].Addon
-      map = func(map, mx, mx2) yield()
-    end
-  end
-  --]]
-  
-  return World
-end
+    time = function(newTime) if isNumber(newTime) then Time = newTime else return Time end end,
+    spawn = function(x, y) if isNumber(x) and isNumber(y) then Spawn[1], Spawn[2] = x, y else return Spawn[1], Spawn[2] end end,
+    seed = function(newSeed) if isNumber(seed) or isString(seed) then Seed = newSeed else return Seed end end,
+    worldName = function(name) if isString(name) then WorldName = name else return WorldName end end
+}

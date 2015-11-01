@@ -1,0 +1,59 @@
+local computerID, yield, time = os.getComputerID(), coroutine.yield, os.time
+local premadePacket, openPort, modem = {computerID, playerName, data}, 25565
+
+local function isValidPacket(packet)
+  return type(packet) == "table" and type(packet[1]) == "string" and (type(packet[2]) == "string" or type(packet[2]) == "table")
+  -- do player.isPlayer for packet[1]
+end
+
+local function encryptString(string, password)
+  local password = (password or "password")..time()
+end
+
+local function checkForModem()
+  if not modem then 
+    for _, name in ipairs(peripheral.getNames()) do
+        if peripheral.getType(name) == "modem" then
+          modem = peripheral.wrap(name); modem.open(openPort); return true
+        end
+    end
+  end
+  if not modem then reportError("Server", "Server:n/a: modem has been disconnected.") end
+end
+
+local Server = {}
+local connectedPlayers = {}
+function Server.packet(playerName, data)
+  checkForModem()
+  if playerName and connectedPlayers[playerName] and data then 
+    premadePacket[2] = playerName; premadePacket[3] = data;
+    modem.transmit(openPort, connectedPlayers[playerName], premadePacket); return 
+  end
+
+  while true do
+    local _, _, _, replyChannel, packet = yield("modem_message")
+    return packet
+    --if isValidPacket(packet) then return packet end
+  end
+end
+
+function Server.open()
+  checkForModem()
+  modem.open(openPort)
+end
+
+function Server.close()
+  checkForModem()
+  modem.close(openPort)
+  -- Go through all players in list, send them packet "disconnect"
+end
+
+function Server.allowConnection()
+
+end
+
+function Server.hasModem()
+  return modem and true
+end
+
+return Server

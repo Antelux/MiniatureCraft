@@ -1,0 +1,52 @@
+local Keyboard = require "API/Keyboard"
+local Screen = require "API/Buffer"
+local Interface, interfaces = {}, {}
+local ty, currentInterface = type
+
+function Interface.set(interfaceName, interfaceFunction)
+	interfaces[interfaceName] = interfaceFunction
+end
+
+function Interface.new(interfaceName)
+	return interfaces[interfaceName] and interfaces[interfaceName]()
+end
+
+function Interface.current(interfaceName)
+	if ty(interface) == "string" then currentInterface = interfaces[interfaceName] and interfaces[interfaceName]() else return currentInterface end
+end
+
+local splashText = {"Hello, world!", "Why are you even reading this.", "OMG MINIATURECRAFT!!1!", "Fun.", "It's game time!", "Monday Night Football.", "Monday Night Futbol.", "Hey, look at me!", "Some splash text.", "By Detective_Smith!", "104% Shinier!", "Will this line even fit on the screen..? Probably.", "More splash text.", "Obscure Reference A.", "3.0!?", "Good for your colon!", "Brand new internals!", "Made with Lua. And Bacon.", "Dance time!", "Fancy.", "Lemniscate.", "Now with more craft!", "Now 10% more miniature!*", "...", "Bigger, better, faster, stronger!", "Life is peaceful there.", "Lots of open air.", "To begin life anew.", "Where the skies are blue."}
+Interface.set("titleMenu", function()
+ 	local options = {"Start game", "How to play", "About"}
+ 	local selected = 0
+ 	
+  	return {
+	    update = function()
+		    if Keyboard.isDown(keys.up) then selected = selected - 1 end
+		    if Keyboard.isDown(keys.down) then selected = selected + 1 end
+
+		    if selected < 0 then selected = #options end
+		    if selected > #options then selected = 1 end
+
+		    if Keyboard.isDown(keys.c) then
+		     	if selected == 1 then
+
+		      	elseif selected == 2 then Client.interface("InstructionsMenu")
+		      	else Client.interface("AboutMenu") end 
+		    end
+		end,
+	    
+	    render = function()
+		    local w, h = Screen.getSize()
+		    Screen.setCursorPos(1, 1)
+		    Screen.write("MiniatureCraft")
+
+		    for i = 1, 3 do
+		      local str = (selected == i and "> " or "").. options[i] ..(selected == i and " <" or "")
+		      Screen.setCursorPos((w/2) - (#str/2), (h/2) - 2 + i); Screen.write(str)
+		    end
+		end
+  	}
+end)
+
+return Interface

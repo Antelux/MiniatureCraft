@@ -1,99 +1,120 @@
-local nativeTerm = term.native(); 
-local sx, sy = nativeTerm.getSize()
+local nativeTerm = term.native(); local ty, rep, sub, floor, poWidth, abs = type, string.rep, string.sub, math.floor, math.poWidth, math.abs
+local setCursorBlink, setCursorPos, setBackgroundColor, setTextColor, nWrite, blit = nativeTerm.setCursorBlink, nativeTerm.setCursorPos, nativeTerm.setBackgroundColor, nativeTerm.setTextColor, nativeTerm.write, nativeTerm.blit
 local decToHex = {[1] = "0", [2] = "1", [4] = "2", [8] = "3", [16] = "4", [32] = "5", [64] = "6", [128] = "7", [256] = "8", [512] = "9", [1024] = "a", [2048] = "b", [4096] = "c", [8192] = "d", [16384] = "e", [32768] = "f"}
 
-local function getColorOf(hex) return math.pow(2, tonumber(hex, 16)) end
-local function colorIsValid(color, isColor)
-    if type(color) ~= "number" then return end
-    if isColor then if color < 1 or color > 32768 then return end
-    else if color ~= 1 or color ~= 32768 then return end end return true
+local CursorX, CursorY = 1, 1
+local Width, Height = nativeTerm.getSize()
+local tColor, bColor = colors.white, colors.black
+local CursorBlink = false
+local isDirty = false 
+local Screen = {}
+local defaultShader = function(pixel) return pixel[1], pixel[2], pixel[3] end
+local Shader = defaultShader
+
+for y = 1, Height do 
+    Screen[y] = {}
+    for x = 1, Width do
+        Screen[y][x] = {bColor, tColor, " "}
+    end
 end
 
-_G.Buffer = {}
-function Buffer.createBuffer(x, y, width, height, termIsColor)
-    local termObject = {
-        CursorX = 1, CursorY = 1,
-        OffsetX = (x or 1) - 1, OffsetY = (y or 1) - 1,
-        Width = width or sx, Height = height or sy,
-        TColor = colors.white, BColor = colors.black,
-        CursorBlink = false,
-        TermIsColor = termIsColor or nativeTerm.isColor(),
-        textScreen = {}, textColor = {}, backColor = {},
-        ots = {}, otc = {}, obc = {}
-    }
+return {
+    write = function(tString)
+        tString = ty(tString) ~= "string" and ""..tString or tString 
+        if CursorX < 1 or CursorX > Width or CursorY < 1 or CursorY > Height then return end; 
+        local tC_0, bC_0 = tColor == 0, bColor == 0; local Screen_Y = Screen[CursorY]
 
-    for i = 1, termObject.Height do 
-        termObject.textScreen[i] = string.rep(" ", termObject.Width)
-        termObject.textColor[i] = string.rep(decToHex[termObject.TColor], termObject.Width) 
-        termObject.backColor[i] = string.rep(decToHex[termObject.BColor], termObject.Width) 
-        termObject.ots[i] = string.rep("X", termObject.Width)
-        termObject.otc[i] = string.rep(decToHex[termObject.BColor], termObject.Width) 
-        termObject.obc[i] = string.rep(decToHex[termObject.TColor], termObject.Width) 
-    end
-
-    local terminalFunctions = {
-        isColor = function(termObject) return termObject.TermIsColor end,
-        write = function(termObject, ...)
-            local tString = tostring(...) or ""
-            if termObject.CursorX < 1 or termObject.CursorX > termObject.Width or termObject.CursorY < 1 or termObject.CursorY > termObject.Height or #tString == 0 then return end
-            termObject.textScreen[termObject.CursorY] = string.sub(termObject.textScreen[termObject.CursorY], 1, termObject.CursorX - 1) ..tString.. string.sub(termObject.textScreen[termObject.CursorY], termObject.CursorX + #tString)
-            termObject.textColor[termObject.CursorY] = string.sub(termObject.textColor[termObject.CursorY], 1, termObject.CursorX - 1) ..string.rep(decToHex[termObject.TColor], #tString).. string.sub(termObject.textColor[termObject.CursorY], termObject.CursorX + #tString)
-            termObject.backColor[termObject.CursorY] = string.sub(termObject.backColor[termObject.CursorY], 1, termObject.CursorX - 1) ..string.rep(decToHex[termObject.BColor], #tString).. string.sub(termObject.backColor[termObject.CursorY], termObject.CursorX + #tString)
-            termObject.CursorX = termObject.CursorX + #tString
-        end,
-         
-        setCursorPos = function(termObject, x, y) termObject.CursorX, termObject.CursorY = math.floor(x), math.floor(y) end,  
-        getCursorPos = function(termObject) return termObject.CursorX, termObject.CursorY end,
-        scroll = function(termObject, scrollAmount) end,
-         
-        clear = function(termObject)
-            for i = 1, termObject.Height do 
-                termObject.textScreen[i] = string.rep(" ", termObject.Width) 
-                termObject.textColor[i] = string.rep(decToHex[termObject.TColor], termObject.Width) 
-                termObject.backColor[i] = string.rep(decToHex[termObject.BColor], termObject.Width) 
+        if tC_0 and bC_0 then
+            for i = 1, #tString do
+                local pixel = Screen_Y[CursorX]; CursorX = CursorX + 1
+                pixel[3] = sub(tString, i, i); if CursorX > Width then break end
             end
-        end,
-        
-        clearLine = function(termObject) end,
-        setCursorBlink = function(termObject, cBool) if type(cBool) == "boolean" then termObject.CursorBlink = cBool end end,
-        getSize = function(termObject) return termObject.Width, termObject.Height end,
-        setTextColor = function(termObject, color) if colorIsValid(color, termObject.TermIsColor) then termObject.TColor = color end end,
-        setBackgroundColor = function(termObject, color) if colorIsValid(color, termObject.TermIsColor) then termObject.BColor = color end end,
-
-        drawScreen = function(termObject, x, y, w, h)
-            local currentTColor, currentBColor, changePosition = termObject.TColor, termObject.BColor, false
-            nativeTerm.setCursorBlink(false) 
-            for y = 1, termObject.Height do
-                if not changePosition then nativeTerm.setCursorPos(1 + termObject.OffsetX, y + termObject.OffsetY) end
-                for x = 1, termObject.Width do
-                    if string.sub(termObject.textColor[y], x, x) == string.sub(termObject.otc[y], x, x) and string.sub(termObject.backColor[y], x, x) == string.sub(termObject.obc[y], x, x) and string.sub(termObject.textScreen[y], x, x) == string.sub(termObject.ots[y], x, x) then
-                        changePosition = true
-                    else
-                        if changePosition then nativeTerm.setCursorPos(termObject.OffsetX + x, y + termObject.OffsetY); changePosition = false end
-                        nativeTerm.setBackgroundColor(getColorOf(string.sub(termObject.backColor[y], x, x)))
-                        nativeTerm.setTextColor(getColorOf(string.sub(termObject.textColor[y], x, x)))
-                        nativeTerm.write(string.sub(termObject.textScreen[y], x, x)) 
-                    end
-                end
+        elseif tC_0 then
+            for i = 1, #tString do
+                local pixel = Screen_Y[CursorX]; CursorX = CursorX + 1
+                pixel[3], pixel[1] = sub(tString, i, i), bColor
+                if CursorX > Width then break end
             end
-
-            nativeTerm.setBackgroundColor(termObject.BColor); nativeTerm.setTextColor(termObject.TColor)
-            if termObject.CursorBlink then nativeTerm.setCursorPos(termObject.CursorX, termObject.CursorY); nativeTerm.setCursorBlink(true) end
-
-            for y = 1, #termObject.textScreen do termObject.ots[y] = termObject.textScreen[y] end
-            for y = 1, #termObject.textColor do termObject.otc[y] = termObject.textColor[y] end
-            for y = 1, #termObject.backColor do termObject.obc[y] = termObject.backColor[y] end
+        elseif bC_0 then
+            for i = 1, #tString do
+                local pixel = Screen_Y[CursorX]; CursorX = CursorX + 1
+                pixel[3], pixel[2] = sub(tString, i, i), tColor
+                if CursorX > Width then break end
+            end
+        else
+            for i = 1, #tString do
+                local pixel = Screen_Y[CursorX]; CursorX = CursorX + 1
+                pixel[3], pixel[2], pixel[1] = sub(tString, i, i), tColor, bColor
+                if CursorX > Width then break end
+            end
         end
-    }
+        isDirty = true
+    end,
 
-    terminalFunctions.setBackgroundColour = terminalFunctions.setBackgroundColor
-    terminalFunctions.setTextColour = terminalFunctions.setTextColor
-    terminalFunctions.isColour = terminalFunctions.isColor
-    local function wrapTable(f, o) return function(...) return f(o, ...) end end
-    for k, v in pairs(terminalFunctions) do
-        if type(v) == "function" then terminalFunctions[k] = wrapTable(v, termObject)
-        else terminalFunctions[k] = v end
+    getScreen = function() return Screen end, 
+    setDirty = function(db) isDirty = db end,
+    setCursorPos = function(x, y) CursorX, CursorY = floor(x), floor(y) end,
+    getCursorPos = function() return CursorX, CursorY end,
+    scroll = function() end,
+     
+    clear = function()
+        for y = 1, Height do 
+            local Screen_Y = Screen[y]
+            for x = 1, Width do 
+                local pixel = Screen_Y[x]
+                pixel[3], pixel[1] = " ", bColor
+            end 
+        end
+        isDirty = true
+    end,
+    
+    clearLine = function() 
+        local Screen_Y = Screen[CursorY]
+        for x = 1, Width do 
+            local pixel = Screen_Y[x]
+            pixel[3], pixel[1] = " ", bColor
+        end 
+    end,
+
+    setCursorBlink = function(cb) CursorBlink = cb end,
+    getSize = function() return Width, Height end,
+
+    isColor = function() return true end,
+    isColour = function() return true end,
+
+    setTextColor = function(color) tColor = color end,
+    setBackgroundColor = function(color) bColor = color end,
+
+    setTextColour = function(color) tColor = color end,
+    setBackgroundColour = function(color) bColor = color end,
+
+    shader = function(shader) Shader = ty(shader) == "function" and shader or defaultShader end,
+    blit = function(text, tcolor, bcolor)
+        if CursorX < 1 or CursorX > Width or CursorY < 1 or CursorY > Height then return end
+        local Screen_Y = Screen[CursorY]
+        for i = 1, #tString do
+            local pixel = Screen_Y[CursorX]; CursorX = CursorX + 1
+            pixel[1], pixel[2], pixel[3] = sub(bcolor, i, i), sub(tcolor, i, i), sub(text, i, i)
+        end
+        isDirty = true
+    end,
+    
+    draw = function()
+        if not isDirty then return end; isDirty = false
+        if cursorBlink then setCursorBlink(false) end
+
+        for y = 1, Height do
+            local Screen_Y = Screen[y]; local bbc, btc, bts = "", "", ""
+            for x = 1, Width do
+                local bc, tc, ts = Shader(Screen_Y[x], x, y)
+                bbc, btc, bts = bbc..decToHex[bc], btc..decToHex[tc], bts..ts
+            end
+            setCursorPos(1, y); blit(bts, btc, bbc)
+        end
+
+        if not cursorBlink then return end; local pixel = Screen[CursorY][CursorX]
+        setTextColor(tColor ~= 0 and tColor or pixel[2])
+        setBackgroundColor(bColor ~= 0 and bColor or pixel[1]) 
+        setCursorPos(CursorX, CursorY); setCursorBlink(true)
     end
-    setmetatable(termObject, {__index = terminalFunctions})
-    return termObject
-end
+}

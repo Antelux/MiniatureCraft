@@ -1,0 +1,28 @@
+local keyRepeat = true
+local keysHeld = {}
+local tblr = table.remove
+local concat = table.concat
+
+local function search(key)
+	for i = 1, #keysHeld do if keysHeld[i] == key then return true end end
+	if key == concat(keysHeld, "+") then return true end
+end
+
+local function apply(key, held)
+	if held then if not search(key) then keysHeld[#keysHeld + 1] = key end
+	else for i = 1, #keysHeld do if keysHeld[i] == key then tblr(keysHeld, i); break end end end
+end
+
+return {
+	version      = function()      return "1.033-NS"  end, -- NS stands for Non-String
+	isDown       = function(key)   return search(key) end,
+	getHeldKeys  = function()      return keysHeld    end,
+	setKeyRepeat = function(kBool) keyRepeat = kBool  end,
+	getKeyRepeat = function()      return keyRepeat   end,
+	reset        = function()      keysHeld = {}      end,
+	updateKeys   = function(event, key, held) 
+			if event == "key" then apply(key, not held or keyRepeat)
+		elseif event == "key_up" then apply(key)
+		elseif event == "paste" then apply(keys.v, true) end
+	end
+}

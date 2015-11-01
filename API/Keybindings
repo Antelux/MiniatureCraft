@@ -1,0 +1,19 @@
+local Keybindings = {up = keys.w, down = keys.s, left = keys.a, right = keys.d, lock = keys.leftShift, interact = keys.e, useItem = keys.space, pause = keys.backspace, chat = keys.t, hideGUI = keys.f1, screenshot = keys.f2, showDebug = keys.f3}
+local MainFolder = ...
+
+Keybindings.save = function()
+	fs.delete(MainFolder.. "/Config/keybinds.cfg")
+	local file = fs.open(MainFolder.. "/Config/keybinds.cfg", "w")
+	local save = Keybindings.save; Keybindings.save = nil
+	file.write(textutils.serialize(Keybindings)); file.close()
+	Keybindings.save = save
+end
+
+if fs.exists(MainFolder.. "/Config/keybinds.cfg") then
+	local file = fs.open(MainFolder.. "/Config/keybinds.cfg", "r")
+	local keybinds = textutils.unserialize(file.readAll()); file.close()
+	if type(keybinds) ~= "table" then Keybindings.save(); return end
+	for key, value in pairs(keybinds) do Keybindings[key] = value end
+else Keybindings.save() end
+
+return Keybindings

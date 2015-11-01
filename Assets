@@ -1,90 +1,3 @@
---[[ To do (Future Stuffs)
-  * switchTexture = {} - The texture used when a block is switched on or off, i.e. levers. {\, /}
-  * poweredTexture = {} - The texture for blocks when powered by redstone
-  * poweredInputs = {} - The sides that can take power
-  * poweredOutputs = {} - The sides that give off power when powered
-
-  * activeTexture = {} - The texture used when a block is smelting an item, i.e. Furnace or Oven.
-  Might not implement this.
-
-  * whitelist / blacklist = {} - Sets what tiles it can be placed on
-
-  * maxStack = number - Tells the game whats the max amount you can carry for that type of item, 
-                        I should make the blocks have a default max stack of 99, and items default to 1.
-    
-  * Smoother lighting
-
-  * Add better animations
-        Here's the idea for this:
-        - Menus such as the player inventory would "Slide" in (Going right)
-        - Menus such as the main one would fade in from the background.
-        - What your holding would slide upward, given it's something with durability.
---]]
-
---[[ To do (To release as 2.0)
-    * Save blocks / tiles that have an ID bigger than 255
-    * Fix Bug: "If you type only spaces in the chat then the game crashes. Can you fix it please?"
-    * Fix screen offset bug
-    * Finish InterfaceAPI
-    * Make better use of the "storage" table.
-    * Main loop function:
-        -- Mods can have scripts which check the main loop of the game, and catch "events."
-           Such examples of these "events" are:
-            - "interact" events, returns which player interacted with which block using which asset. (Useful for protection scripts)
-            - "death" events, returns which player died and cause of death.
-            - "chat" events, returns which player said what.
-            - "attack" events, returns which player/mob/block hurt another player/mob/block
-    * Make the buffer split strings correctly!
-    * Add spawn eggs - "Also, out of curiousity, is it intended that you can /give yourself an entity?"
-
-    ----- TODO as of next release -----
-    * Make the chat commands have more restrictions!
-    * Make it so that you can add new dimensions instead of just modifying current ones
---]]
-
---[[ What's new this version:
-    -- New functions: Menu.drawMenuBox(), Menu.Write(), Level.setInGame(), Level.isInGame(), Level.setSingleplayer(), Level.isSingleplayer()
-    -- Direct Buffer Interfacing with the game's main drawer. Potentially allows for faster rendering.
-    -- Entites are now saved.
-    -- A (Really Ugly) Underworld, Some slight world tweaks. Disabled for now until it's complete.
-    -- A basic lighting system.
-    -- Major buffer speed up, atleast twice as fast, if not more.
-    -- Partly fixes an offset bug, where you could see purple textures.
-    
-    * Allows assets to define a new variable: "animationSpeed"
-    == Here is the information on it.
-        -- The speed must be atleast than 1.
-        -- Setting the number to "20" makes it happen once every second.
-           This means multiples of 20 equal 1 second. 40 = 2 seconds, 60 = 3 seconds, etc
-        -- Setting the number to "10" makes it happen twice a second.
-        -- Setting the number to "1" makes it happen 20 times a second, the fastest possible.
-
-    * Mods can now add in their own generation code
-    == Supply the function File.addMod() with a table called "Generation"
-        -- File.addMod(Generation = {
-                                        [Dimension Number (Ex 0 for overworld)] = {
-                                            ["before"] = generationFunction(), -- Used if you want to run the function before the specific dimension is generated, leave empty if not used.
-                                            ["after"] = generationFunction() -- Used if you want to run the function after the specific dimension is generated, leave empty if not used.
-                                        }
-                                    })
-        -- Your function is handed the whole dimension you requested. From there, you can use a loop like so:
-            local width, height = Level.getSize()
-            for x = 1, width do
-                for y = 1, height do
-                    -- Your code here
-                end
-            end
-
-    * Completley overhauled how the game's main loop works.
-    == Two coroutines, render and game
-        -- the render coroutine draws to the screen.
-        -- the game coroutine updates the world and everything in it.
-            - Both are ran based on the target FPS (Default is 20)
-            - Both are timed to see how long it takes to run
-                * the game coroutine runs in UPS (updates per second)
-                * the render coroutine runs in FPS (frames per second)
---]]
-
 local function growIntoATree(dim, x, y)
     if math.random(1000) ~= 1 then return end
     Level.setData(dim, x, y, {Block = {ID = 2}, Tile = {ID = 55}})
@@ -93,6 +6,16 @@ local function growIntoATree(dim, x, y)
     if not Level.checkForCollision(dim, x - 1, y - 1) then Level.setData(dim, x - 1, y - 1, {Block = {ID = 3}}) end
     if not Level.checkForCollision(dim, x, y - 1) then Level.setData(dim, x, y - 1, {Block = {ID = 3}}) end
     if not Level.checkForCollision(dim, x, y - 2) then Level.setData(dim, x, y - 2, {Block = {ID = 3}}) end
+end
+
+local function growIntoWheat(dim, x, y)
+    if math.random(1000) ~= 1 then return end
+    Level.setData(dim, x, y, {Block = {ID = 60}})
+end
+
+local function spawnEntity(dim, x, y, id)
+    Level.setData(dim, x, y, {Block = {ID = false}})
+    Entity.spawnEntity(id, dim, x, y)
 end
 
 local function keepCoordinates(x, y, direction, name)
@@ -116,136 +39,233 @@ end
 local function staircaseUp(dim, x, y) changePlayerDimension(dim, x, y, 1) end
 local function staircaseDown(dim, x, y) changePlayerDimension(dim, x, y, -1) end
 
-local function passiveMobScript(entityID) 
-    if math.random(4) ~= 1 then return end
-    local newDirection = math.random(4)
-    Entity.setDirection(entityID, newDirection)
-    Entity.move(entityID, 1, true)
+local function passiveMobScript(id) 
+    local entityID = id
+    local roam, canMove = 0, 0
+
+    while true do
+        if canMove >= Entity.getSpeed(entityID) then
+            if roam == 0 then Entity.setDirection(entityID, math.random(4)); canMove = 0 end
+            if math.random(3) == 1 then 
+                local roamMoved = Entity.move(entityID, 1, true) 
+                if roamMoved then roam = roam + 1 else roam = 0 end; if roam == 3 then roam = 0 end
+                if roamMoved then canMove = 0 end
+            end
+        else canMove = canMove + 1 end
+        coroutine.yield()
+    end
 end
 
-local function hostileMobScript(entityID) 
-    if math.random(4) ~= 1 then return end
-    local newDirection = math.random(4)
-    Entity.setDirection(entityID, newDirection)
-    Entity.move(entityID, 1, true)
+local function hostileMobScript(id) 
+    local entityID, target = id, false
+    local roam, canMove = 0, 0
+    local pHor, pVer, fails = false, false, 0
+
+    while true do
+        if canMove >= Entity.getSpeed(entityID) then
+            if type(target) == "string" and Player.getMode(target) == 0 and Player.isAlive(target) then
+                if Player.getMode(target) == 1 or not Player.isAlive(target) then target = false; fails = 0; canMove = 0 end
+                local px, py = Player.getCoordinates(target)
+                local cx, cy = Entity.getCoordinates(entityID) 
+                local moved = false
+
+                if cy > py and cy - 1 ~= py and not pHor then Entity.setDirection(entityID, 1); moved = Entity.move(entityID, 1, true) if not moved then pHor = true end end -- Go up
+                if cx < px and cx + 1 ~= px and not pVer then Entity.setDirection(entityID, 2); moved = Entity.move(entityID, 1, true) if not moved then pVer = true end end -- Go right
+                if cy < py and cy + 1 ~= py and not pHor then Entity.setDirection(entityID, 3); moved = Entity.move(entityID, 1, true) if not moved then pHor = true end end -- Go down
+                if cx > px and cx - 1 ~= px and not pVer then Entity.setDirection(entityID, 4); moved = Entity.move(entityID, 1, true) if not moved then pVer = true end end -- Go left
+                
+                if cx == px - 1 and cy == py - 1 then Entity.setDirection(entityID, 3); moved = Entity.move(entityID, 1, true); if not moved then Entity.setDirection(entityID, 2); moved = Entity.move(entityID, 1, true) end; if moved then pHor = false; pVer = false; end end
+                if cx == px - 1 and cy == py + 1 then Entity.setDirection(entityID, 1); moved = Entity.move(entityID, 1, true); if not moved then Entity.setDirection(entityID, 4); moved = Entity.move(entityID, 1, true) end; if moved then pHor = false; pVer = false; end end
+                if cx == px + 1 and cy == py - 1 then Entity.setDirection(entityID, 3); moved = Entity.move(entityID, 1, true); if not moved then Entity.setDirection(entityID, 2); moved = Entity.move(entityID, 1, true) end; if moved then pHor = false; pVer = false; end end
+                if cx == px + 1 and cy == py + 1 then Entity.setDirection(entityID, 1); moved = Entity.move(entityID, 1, true); if not moved then Entity.setDirection(entityID, 4); moved = Entity.move(entityID, 1, true) end; if moved then pHor = false; pVer = false; end end
+
+                Entity.attack(entityID, target)
+
+                if not moved then
+                    if pHor then
+                        moved = Entity.setDirection(entityID, 2); moved = Entity.move(entityID, 1, true) -- Go right
+                        if not moved then Entity.setDirection(entityID, 4); moved = Entity.move(entityID, 1, true) end -- Go left
+                        pHor = false; if not moved then pVer = true end
+                    end
+                    if pVer and not moved then
+                        moved = Entity.setDirection(entityID, 1); moved = Entity.move(entityID, 1, true) -- Go up
+                        if not moved then Entity.setDirection(entityID, 3); moved = Entity.move(entityID, 1, true) end -- Go down
+                        pVer = false; if not moved then pHor = true end
+                    end
+                end
+                if not moved and not Entity.canSeePlayer(entityID, target) then fails = fails + 1 end; if fails == 10 then target = false; fails = 0 end
+                canMove = 0 
+            else 
+                if roam == 0 then Entity.setDirection(entityID, math.random(4)); canMove = 0 end
+                if math.random(3) == 1 then 
+                    local roamMoved = Entity.move(entityID, 1, true) 
+                    if roamMoved then roam = roam + 1 else roam = 0 end; if roam == 3 then roam = 0 end
+                    if roamMoved then canMove = 0 end
+                end
+                local player = Entity.getClosestPlayer(entityID, 5, true)
+                if type(player) == "string" and Player.getMode(player) == 0 and Player.isAlive(player) then target = player; canMove = 0; roam = 0 end
+            end
+        else canMove = canMove + 1 end
+        coroutine.yield()
+    end
 end
 
-_G.File = {}
-function File.getVersion() return "1.98b-Beta" end
-function File.getAssets()
-    return {
+local function shootProjectile(entityID)
+    local entityID, canMove = id, 0
+    Entity.setDirection(entityID, 1)
+    while true do
+        if canMove >= Entity.getSpeed(entityID) then
+            if not Entity.move(entityID, 1, true) then Entity.removeEntity(entityID) end
+            canMove = 0
+        else canMove = canMove + 1 end
+        coroutine.yield()
+    end
+end
+
+local random = math.random
+local function dirtTick(chunk, dim, x, y)
+    local center = chunk[y][x]; center[1] = 50
+    --[[
+    if dim ~= 0 then return end
+    local center, left, right, up, down = chunk[y][x], chunk[y][x - 1], chunk[y][x + 1], chunk[y - 1] and chunk[y - 1][x], chunk[y + 1] and chunk[y + 1][x]
+    local chanceToBecomeGrass = 0
+
+    if left and not left[5] and left[1] == 50 then chanceToBecomeGrass = chanceToBecomeGrass + 1 end
+    if right and not right[5] and right[1] == 50 then chanceToBecomeGrass = chanceToBecomeGrass + 1 end
+    if up and not up[5] and up[1] == 50 then chanceToBecomeGrass = chanceToBecomeGrass + 1 end
+    if down and not down[5] and down[1] == 50 then chanceToBecomeGrass = chanceToBecomeGrass + 1 end
+
+    if chanceToBecomeGrass == 0 then return end
+    if chanceToBecomeGrass < random(1000) then center[1] = 50 end
+    --]]
+    return chunk
+end
+
+local function liquidTick(chunk, dim, x, y)
+    local left, right, up, down = chunk[y][x - 1], chunk[y][x + 1], chunk[y - 1] and chunk[y - 1][x], chunk[y + 1] and chunk[y + 1][x]
+
+    if left and not left[5] and left[1] == 57 then left[1], left[2], left[3] = 51, random(2), random(0, 5) * 0.1 end
+    if right and not right[5] and right[1] == 57 then right[1], right[2], right[3] = 51, random(2), random(0, 5) * 0.1 end
+    if up and not up[5] and up[1] == 57 then up[1], up[2], up[3] = 51, random(2), random(0, 5) * 0.1 end
+    if down and not down[5] and down[1] == 57 then down[1], down[2], down[3] = 51, random(2), random(0, 5) * 0.1 end
+end
+
+return {
     -- [Blocks] --
-    [1] = {name = "Stone", health = 20, drop = {1, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.gray, "L"}},
-    [2] = {name = "Wood", health = 10, drop = {2, 1}, type = "block", toolNeeded = "axe", texture = {colors.brown, colors.gray, "L"}},
-    [3] = {name = "Leaves", health = 0.5, drop = {5, 1}, type = "block", texture = {colors.green, colors.lime, "#"}},
-    [4] = {name = "Cactus", health = 1, drop = {4, 1}, type = "block", texture = {_, colors.green, "#"}},
-    [5] = {name = "Sapling", health = 0.5, script = growIntoATree, drop = {5, 1}, type = "block", texture = {_, colors.brown, "T"}},
-    -- 6
-    [7] = {name = "Hard Rock", unbreakable = true, drop = {1, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.gray, colors.lightGray, "L"}},
-    [8] = {name = "Coal Ore", health = 25, drop = {213, 1, 1, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.black, "+"}},
-    [9] = {name = "Iron Ore", health = 30, drop = {9, 1, 1, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.magenta, "+"}},
-    [10] = {name = "Gold Ore", health = 35, drop = {10, 1, 1, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.yellow, "+"}},
-    [11] = {name = "Gem Ore", health = 40, drop = {218, 1, 1, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.lightBlue, "+"}},
-    -- 12
-    [13] = {name = "Crafting Table", health = 5, drop = {13, 1}, type = "block", toolNeeded = "axe", texture = {colors.lightGray, colors.brown, "#"}},
-    [14] = {name = "Furnace", health = 8, drop = {14, 1}, type = "block", toolNeeded = "pickaxe", animationSpeed = 3, texture = {colors.gray, colors.red, "U", colors.gray, colors.orange, "U", colors.gray, colors.yellow, "U", colors.gray, colors.orange, "U"}},
-    [15] = {name = "Coal Block", health = 35, drop = {15, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.black, colors.black, "L"}},
-    [16] = {name = "Iron Block", health = 40, drop = {16, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.white, "L"}},
-    [17] = {name = "Gold Block", health = 45, drop = {17, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.yellow, colors.white, "L"}},
-    [18] = {name = "Gem Block", health = 50, drop = {18, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightBlue, colors.white, "L"}},
-    [19] = {name = "Anvil", health = 5, drop = {19, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.gray, "@"}},
-    [20] = {name = "Oven", health = 5, drop = {20, 1}, type = "block", toolNeeded = "pickaxe", animationSpeed = 3, texture = {colors.gray, colors.red, "=", colors.gray, colors.orange, "=", colors.gray, colors.yellow, "=", colors.gray, colors.orange, "="}},
-    -- 21
-    [22] = {name = "Lantern", lightSource = 5, health = 10, drop = {22, 1}, type = "block", texture = {colors.black, colors.yellow, "+"}},    
-    [23] = {name = "Redstone Ore", health = 25, drop = {235, 4}, type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.red, "+"}},
-    [24] = {name = "Redstone Block", health = 25, drop = {24, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.red, colors.white, "L"}},
-    [25] = {name = "Chest", health = 10, interface = "Chest", drop = {25, 1}, inventory = 32, type = "block", toolNeeded = "axe", texture = {colors.brown, colors.white, "v"}},
-    [26] = {name = "Dandelion", health = 0.5, drop = {26, 1}, type = "blocktile", texture = {_, colors.yellow, "*"}},
-    [27] = {name = "Azul", health = 0.5, drop = {27, 1}, type = "blocktile", texture = {_, colors.blue, "*"}},
-    [28] = {name = "Rose", health = 0.5, drop = {28, 1}, type = "blocktile", texture = {_, colors.red, "*"}},
-    [29] = {name = "Torch", lightSource = 3, health = 1, drop = {29, 1}, type = "blocktile", texture = {_, colors.brown, "i"}},    
-    [30] = {name = "Glowstone", lightSource = 4, health = 4, drop = {222, 4}, type = "block", toolNeeded = "pickaxe", texture = {colors.yellow, colors.orange, "L"}},
-    [31] = {name = "Netherrack", health = 6, drop = {31, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.red, colors.brown, "L"}},
-    [32] = {name = "Netherbrick", health = 10, drop = {32, 1}, type = "block", toolNeeded = "pickaxe", texture = {colors.purple, colors.brown, "L"}},
-    [33] = {name = "Fire", lightSource = 2, health = 0.5, type = "blocktile", texture = {_, colors.red, "%", _, colors.orange, "&", _, colors.yellow, "#", _, colors.orange, "@", _, colors.red, ";"}},
-    [34] = {name = "Door", health = 5, interface = "doorclosed", drop = {34, 1}, type = "block", toolNeeded = "axe", texture = {_, colors.brown, "D"}},
-    [35] = {name = "Door_Open", health = 5, interface = "dooropen", drop = {34, 1}, type = "blocktile", toolNeeded = "axe", texture = {_, colors.brown, "l"}},
-    -- 36 - 44
+    [01] = {name = "Stone", health = 30, drop = {1, 1}, type = "block", material = "stone", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.gray, "L"}},
+    [02] = {name = "Wood", health = 10, drop = {2, 1}, type = "block", material = "wood", toolNeeded = "axe", texture = {colors.brown, colors.gray, "L"}},
+    [03] = {name = "Leaves", health = 0.5, drop = {5, 1}, type = "block", material = "plant", texture = {colors.green, colors.lime, "#"}},
+    [04] = {name = "Cactus", health = 1, drop = {4, 1}, type = "block", material = "plant", texture = {_, colors.green, "#"}},
+    [05] = {name = "Sapling", health = 0.5, tick = growIntoATree, drop = {5, 1}, type = "block", material = "plant", texture = {_, colors.brown, "T"}},
+    [06] = {name = "Obsidian", health = 60, drop = {6, 1}, type = "block", material = "stone", toolNeeded = "pickaxe", texture = {colors.black, colors.purple, "L"}},
+    [07] = {name = "Hard Stone", drop = {1, 1}, type = "block", material = "stone", toolNeeded = "pickaxe", texture = {colors.gray, colors.lightGray, "L"}},
+    [08] = {name = "Coal Ore", health = 35, drop = {213, 1, 1, 1}, material = "stone", type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.black, "+"}},
+    [09] = {name = "Iron Ore", health = 40, drop = {9, 1, 1, 1}, material = "stone", type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.magenta, "+"}},
+    [10] = {name = "Gold Ore", health = 45, drop = {10, 1, 1, 1}, material = "stone", type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.yellow, "+"}},
+    [11] = {name = "Gem Ore", health = 50, drop = {218, 1, 1, 1}, material = "stone", type = "block", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.lightBlue, "+"}},
+    [12] = {name = "Glass", health = 5, type = "block", material = "glass", texture = {_, colors.white, "L"}},
+    [13] = {name = "Crafting Table", health = 5, drop = {13, 1}, material = "wood", type = "block", toolNeeded = "axe", texture = {colors.lightGray, colors.brown, "#"}},
+    [14] = {name = "Furnace", light = 3, health = 10, drop = {14, 1}, type = "block", material = "stone", toolNeeded = "pickaxe", animationSpeed = 0.15, texture = {colors.gray, colors.red, "U", colors.gray, colors.red, "U", colors.gray, colors.orange, "U", colors.gray, colors.yellow, "U", colors.gray, colors.orange, "U"}},
+    [15] = {name = "Coal Block", health = 40, drop = {15, 1}, type = "block", material = "metal", toolNeeded = "pickaxe", texture = {colors.black, colors.black, "L"}},
+    [16] = {name = "Iron Block", health = 45, drop = {16, 1}, type = "block", material = "metal", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.white, "L"}},
+    [17] = {name = "Gold Block", health = 50, drop = {17, 1}, type = "block", material = "metal", toolNeeded = "pickaxe", texture = {colors.yellow, colors.white, "L"}},
+    [18] = {name = "Gem Block", health = 55, drop = {18, 1}, type = "block", material = "metal", toolNeeded = "pickaxe", texture = {colors.lightBlue, colors.white, "L"}},
+    [19] = {name = "Anvil", health = 50, drop = {19, 1}, type = "block", material = "metal",  toolNeeded = "pickaxe", texture = {colors.lightGray, colors.gray, "@"}},
+    [20] = {name = "Oven", light = 3, health = 10, drop = {20, 1}, type = "block", material = "stone", toolNeeded = "pickaxe", animationSpeed = 0.15, texture = {colors.gray, colors.red, "=", colors.gray, colors.red, "=", colors.gray, colors.orange, "=", colors.gray, colors.yellow, "=", colors.gray, colors.orange, "="}},
+    [21] = {name = "Mob Spawner", health = 30, type = "block", toolNeeded = "pickaxe", texture = {_, colors.blue, "#"}},
+    [22] = {name = "Lantern", light = 5, health = 10, drop = {22, 1}, type = "block", material = "metal", animationSpeed = 0.25, texture = {colors.black, colors.yellow, "O", colors.black, colors.yellow, "O", colors.black, colors.white, "O"}},    
+    [23] = {name = "Redstone Ore", health = 35, drop = {235, 4}, type = "block", material = "stone", toolNeeded = "pickaxe", texture = {colors.lightGray, colors.red, "+"}},
+    [24] = {name = "Redstone Block", health = 40, drop = {24, 1}, type = "block", material = "stone", toolNeeded = "pickaxe", texture = {colors.red, colors.white, "L"}},
+    [25] = {name = "Chest", health = 10, interface = "Chest", drop = {25, 1}, inventory = 32, type = "block", material = "wood", toolNeeded = "axe", texture = {colors.brown, colors.white, "v"}},
+    [26] = {name = "Dandelion", health = 0.5, drop = {26, 1}, type = "blocktile", material = "plant", texture = {_, colors.yellow, "*"}},
+    [27] = {name = "Azul", health = 0.5, drop = {27, 1}, type = "blocktile", material = "plant", texture = {_, colors.blue, "*"}},
+    [28] = {name = "Rose", health = 0.5, drop = {28, 1}, type = "blocktile", material = "plant", texture = {_, colors.red, "*"}},
+    [29] = {name = "Torch", light = 3, health = 0.5, drop = {29, 1}, type = "blocktile", material = "wood", animationSpeed = 0.2, texture = {_, colors.brown, "i", _, colors.orange, "i", _, colors.yellow, "i", _, colors.orange, "i", _, colors.brown, "i"}},    
+    [30] = {name = "Glowstone", light = 4, health = 5, drop = {222, 4}, type = "block", material = "stone", toolNeeded = "pickaxe", texture = {colors.yellow, colors.orange, "L"}},
+    [31] = {name = "Netherrack", health = 4, drop = {31, 1}, type = "block", material = "stone", toolNeeded = "pickaxe", texture = {colors.red, colors.brown, "L"}},
+    [32] = {name = "Netherbrick", health = 10, drop = {32, 1}, type = "block", material = "stone", toolNeeded = "pickaxe", texture = {colors.purple, colors.brown, "L"}},
+    [33] = {name = "Fire", light = 2, health = 0.5, type = "blocktile", texture = {_, colors.red, "%", _, colors.orange, "&", _, colors.yellow, "#", _, colors.orange, "@", _, colors.red, ";"}},
+    [34] = {name = "Door", health = 5, interface = "DoorClosed", drop = {34, 1}, type = "block", material = "wood", toolNeeded = "axe", texture = {_, colors.brown, "D"}},
+    [35] = {name = "Door_Open", health = 5, interface = "DoorOpen", drop = {34, 1}, type = "blocktile", material = "wood", toolNeeded = "axe", texture = {_, colors.brown, "l"}},
+    [36] = {name = "Lily", health = 0.5, drop = {36, 1}, type = "blocktile", material = "plant", texture = {_, colors.pink, "*"}},
 
-    -- [Testy Stuff] --
-    [45] = {name = "Test:Flame", type = "block", texture = {colors.red, colors.orange, "%", colors.orange, colors.yellow, "%", colors.yellow, colors.white, "%", colors.orange, colors.yellow, "%"}},
-    [46] = {name = "Test:Pulsar", type = "block", texture = {colors.blue, colors.cyan, "O", colors.cyan, colors.lightBlue, "O", colors.lightBlue, colors.white, "O", colors.cyan, colors.lightBlue, "O"}},
-    [47] = {name = "Test:Gear", type = "block", texture = {_, colors.gray, "+", _, colors.gray, "x"}},
-    [48] = {name = "Test:Fan", type = "block", offTexture = {colors.gray, colors.lightGray, "-"}, texture = {colors.gray, colors.lightGray, "\\", colors.gray, colors.lightGray, "|", colors.gray, colors.lightGray, "/", colors.gray, colors.lightGray, "-"}},
-    [49] = {name = "Test:Rainbow", type = "block", texture = {colors.lightBlue, colors.white, "-", colors.cyan, colors.white, "\\", colors.green, colors.white, "|", colors.lime, colors.white, "/", colors.yellow, colors.white, "-", colors.orange, colors.white, "\\", colors.red, colors.white, "|", colors.magenta, colors.white, "/", colors.purple, colors.white, "-", colors.blue, colors.white, "\\"}},
+    --[[ To do 
+    [36] = {name = "Redstone", health = 0.5, drop = {36, 1}, type = "blocktile", material = "power", texture = {_, colors.brown, "+"}},
+    [37] = {name = "Redstone_On", health = 0.5, drop = {36, 1}, type = "blocktile", material = "power", texture = {_, colors.red, "+"}},
+    [38] = {name = "Redstone Torch", lightSource = 1, health = 0.5, drop = {38, 1}, type = "blocktile", material = "wood", animationSpeed = 0.2, texture = {_, colors.brown, "i", _, colors.red, "i", _, colors.red, "i"}},    
+    [39] = {name = "Redstone Repeater_Horizontal_Off", health = 0.5, drop = {39, 1}, type = "blocktile", material = "stone", animationSpeed = 0.25, texture = {colors.lightGray, colors.brown, "-"}},    
+    [40] = {name = "Redstone Repeater_Vertical_Off", health = 0.5, drop = {40, 1}, type = "blocktile", material = "stone", animationSpeed = 0.25, texture = {colors.lightGray, colors.brown, "|"}},    
+    [41] = {name = "Redstone Repeater_Horizontal_On", health = 0.5, drop = {41, 1}, type = "blocktile", material = "stone", animationSpeed = 0.25, texture = {colors.lightGray, colors.red, "-"}},    
+    [42] = {name = "Redstone Repeater_Vertical_On", health = 0.5, drop = {42, 1}, type = "blocktile", material = "stone", animationSpeed = 0.25, texture = {colors.lightGray, colors.red, "|"}},    
+    [43] = {name = "Iron Door", health = 10, interface = "DoorClosed", drop = {43, 1}, type = "block", material = "metal", toolNeeded = "pickaxe", texture = {_, colors.lightGray, "D"}},
+    [44] = {name = "Iron Door_Open", health = 10, interface = "DoorOpen", drop = {43, 1}, type = "blocktile", material = "metal", toolNeeded = "pickaxe", texture = {_, colors.lightGray, "l"}},
+    --]]
 
     -- [Tiles] --
-    [50] = {name = "Grass", drop = {55, 1}, type = "tile", texture = {colors.lime, colors.green, ">"}},
-    [51] = {name = "Water", type = "liquid", animationSpeed = 10, texture = {colors.blue, colors.lightBlue, "}", colors.blue, colors.cyan, "}"}},
-    -- 52, 53, 54
-    [55] = {name = "Dirt", drop = {55, 1}, type = "tile", texture = {colors.brown, colors.green, ">"}},
-    [56] = {name = "Sand", drop = {56, 1}, type = "tile", texture = {colors.yellow, colors.yellow, " "}},
+    [50] = {name = "Grass", drop = {55, 1}, type = "tile", material = "dirt", texture = {colors.lime, colors.green, ">"}},
+    [51] = {name = "Water", type = "liquid", tick = liquidTick, animationSpeed = 0.5, texture = {colors.blue, colors.lightBlue, "}", colors.blue, colors.cyan, "}"}},
+    [52] = {name = "Ice", type = "tile", texture = {colors.lightBlue, colors.white, "/"}}, -- make me more functional
+    -- 53, 54
+    [55] = {name = "Dirt", drop = {55, 1}, type = "tile", tick = dirtTick, material = "dirt", texture = {colors.brown, colors.green, ">"}},
+    [56] = {name = "Sand", drop = {56, 1}, type = "tile", material = "sand", texture = {colors.yellow, colors.yellow, " "}},
     [57] = {name = "Hole", unbreakable = true, type = "tile", texture = {colors.black, colors.gray, "O"}}, 
-    [58] = {name = "Farm", drop = {55, 1}, type = "tile", texture = {colors.brown, colors.gray, "="}},
-    [59] = {name = "Growing Wheat", drop = {204, 1, 207, 1}, type = "tile", texture = {colors.brown, colors.green, "#"}},
-    [60] = {name = "Aged Wheat", drop = {204, 1, 208, 1}, type = "tile", texture = {colors.brown, colors.yellow, "#"}},
-    [61] = {name = "Lava", lightSource = 2, damage = 1, type = "liquid", animationSpeed = 10, texture = {colors.red, colors.orange, "}", colors.red, colors.yellow, "}"}},
-    [62] = {name = "Stairs Up", script = staircaseUp, unbreakable = true, type = "tile", texture = {colors.gray, colors.lightGray, "/"}},
-    [63] = {name = "Stairs Down", script = staircaseDown, unbreakable = true, type = "tile", texture = {colors.gray, colors.lightGray, "\\"}},
-    [64] = {name = "Infinite Fall", unbreakable = true, type = "tile", texture = {colors.black, colors.black, "#"}},
+    [58] = {name = "Farm", drop = {55, 1}, type = "tile", material = "farmland", texture = {colors.brown, colors.gray, "="}},
+    [59] = {name = "Wheat Seeds", drop = {59, 1}, type = "blocktile", texture = {_, colors.green, "#"}},
+    [60] = {name = "Wheat", drop = {60, 1}, type = "blocktile", texture = {_, colors.yellow, "#"}},
+    [61] = {name = "Lava", light = 2, damage = 1, type = "liquid", tick = liquidTick, animationSpeed = 0.5, texture = {colors.orange, colors.yellow, "}", colors.orange, colors.yellow, ")"}},
+    [62] = {name = "Stairs Up", script = staircaseUp, unbreakable = true, type = "tile", texture = {colors.gray, colors.white, "/"}},
+    [63] = {name = "Stairs Down", script = staircaseDown, unbreakable = true, type = "tile", texture = {colors.gray, colors.white, "\\"}},
+    [64] = {name = "Infinite Fall", unbreakable = true, type = "tile", texture = {colors.black, colors.black, " "}},
     [65] = {name = "Cloud", drop = {220, 1}, type = "tile", texture = {colors.white, colors.lightGray, "~"}},
-    [66] = {name = "Bedrock", unbreakable = true, drop = {66, 1}, type = "tile", texture = {colors.gray, colors.lightGray, "#"}},
-    [67] = {name = "Stone Tile", drop = {67, 1}, type = "tile", texture = {colors.lightGray, colors.gray, ">"}},
-    [68] = {name = "Wood Planks", drop = {68, 1}, type = "tile", texture = {colors.brown, colors.gray, "Z"}},
-    [69] = {name = "Snow", drop = {204, 1, 225, 1}, type = "tile", texture = {colors.white, colors.green, ">"}},
-    [70] = {name = "Growing Potato", drop = {204, 1, 229, 1}, type = "tile", texture = {colors.brown, colors.green, "#"}},
-    [71] = {name = "Aged Potato", drop = {204, 1, 229, 4}, type = "tile", texture = {colors.brown, colors.yellow, "#"}},
-    [72] = {name = "Growing Carrot", drop = {204, 1, 231, 1}, type = "tile", texture = {colors.brown, colors.green, "#"}},
-    [73] = {name = "Aged Carrot", drop = {204, 1, 231, 4}, type = "tile", texture = {colors.brown, colors.orange, "#"}},
+    [66] = {name = "Bedrock", unbreakable = true, drop = {66, 1}, type = "tile", texture = {colors.gray, colors.lightGray, "%"}},
+    [67] = {name = "Stone Tile", drop = {67, 1}, type = "tile", material = "stone", texture = {colors.lightGray, colors.gray, "%"}},
+    [68] = {name = "Wood Planks", drop = {68, 1}, type = "tile", material = "wood", texture = {colors.brown, colors.gray, "Z"}},
+    [69] = {name = "Snow", drop = {204, 1, 225, 1}, type = "tile", material = "dirt", texture = {colors.white, colors.green, ">"}},
+    -- 70 - 73
     [74] = {name = "Hay", drop = {74, 1}, type = "block", texture = {_, colors.yellow, "#"}},
 
     -- [Tools] --
-    [100] = {name = "Wood Sword", durability = 64, damage = 3, type = "sword", texture = {_, colors.brown, "/"}},
-    [101] = {name = "Wood Pickaxe", durability = 64, damage = 2, type = "pickaxe", texture = {_, colors.brown, "T"}},
-    [102] = {name = "Wood Axe", durability = 64, damage = 2, type = "axe", texture = {_, colors.brown, "P"}},
-    [103] = {name = "Wood Shovel", durability = 64, damage = 2, type = "shovel", texture = {_, colors.brown, "!"}},
-    [104] = {name = "Wood Hoe", durability = 64, damage = 1, type = "hoe", texture = {_, colors.brown, "j"}},
+    [100] = {name = "Wood Sword", maxStack = 1, durability = 64, damage = 3, type = "sword", texture = {_, colors.brown, "/"}},
+    [101] = {name = "Wood Pickaxe", maxStack = 1, durability = 64, damage = 2, type = "pickaxe", texture = {_, colors.brown, "T"}},
+    [102] = {name = "Wood Axe", maxStack = 1, durability = 64, damage = 2, type = "axe", texture = {_, colors.brown, "P"}},
+    [103] = {name = "Wood Shovel", maxStack = 1, durability = 64, damage = 2, type = "shovel", texture = {_, colors.brown, "!"}},
+    [104] = {name = "Wood Hoe", maxStack = 1, durability = 64, damage = 1, type = "hoe", texture = {_, colors.brown, "j"}},
 
-    [105] = {name = "Stone Sword", durability = 128, damage = 4, type = "sword", texture = {_, colors.gray, "/"}},
-    [106] = {name = "Stone Pickaxe", durability = 128, damage = 3, type = "pickaxe", texture = {_, colors.gray, "T"}},
-    [107] = {name = "Stone Axe", durability = 128, damage = 3, type = "axe", texture = {_, colors.gray, "P"}},
-    [108] = {name = "Stone Shovel", durability = 128, damage = 3, type = "shovel", texture = {_, colors.gray, "!"}},
-    [109] = {name = "Stone Hoe", durability = 128, damage = 2, type = "hoe", texture = {_, colors.gray, "j"}},
+    [105] = {name = "Stone Sword", energy = 1.25, maxStack = 1, durability = 128, damage = 4, type = "sword", texture = {_, colors.gray, "/"}},
+    [106] = {name = "Stone Pickaxe", energy = 1.25, maxStack = 1, durability = 128, damage = 3, type = "pickaxe", texture = {_, colors.gray, "T"}},
+    [107] = {name = "Stone Axe", energy = 1.25, maxStack = 1, durability = 128, damage = 3, type = "axe", texture = {_, colors.gray, "P"}},
+    [108] = {name = "Stone Shovel", maxStack = 1, durability = 128, damage = 3, type = "shovel", texture = {_, colors.gray, "!"}},
+    [109] = {name = "Stone Hoe", maxStack = 1, durability = 128, damage = 2, type = "hoe", texture = {_, colors.gray, "j"}},
 
-    [110] = {name = "Iron Sword", durability = 256, damage = 5, type = "sword", texture = {_, colors.lightGray, "/"}},
-    [111] = {name = "Iron Pickaxe", durability = 256, damage = 4, type = "pickaxe", texture = {_, colors.lightGray, "T"}},
-    [112] = {name = "Iron Axe", durability = 256, damage = 4, type = "axe", texture = {_, colors.lightGray, "P"}},
-    [113] = {name = "Iron Shovel", durability = 256, damage = 4, type = "shovel", texture = {_, colors.lightGray, "!"}},
-    [114] = {name = "Iron Hoe", durability = 256, damage = 3, type = "hoe", texture = {_, colors.lightGray, "j"}},
+    [110] = {name = "Iron Sword", energy = 1.5, maxStack = 1, durability = 256, damage = 5, type = "sword", texture = {_, colors.lightGray, "/"}},
+    [111] = {name = "Iron Pickaxe", energy = 1.5, maxStack = 1, durability = 256, damage = 4, type = "pickaxe", texture = {_, colors.lightGray, "T"}},
+    [112] = {name = "Iron Axe", energy = 1.5, maxStack = 1, durability = 256, damage = 4, type = "axe", texture = {_, colors.lightGray, "P"}},
+    [113] = {name = "Iron Shovel", energy = 1.25, maxStack = 1, durability = 256, damage = 4, type = "shovel", texture = {_, colors.lightGray, "!"}},
+    [114] = {name = "Iron Hoe", energy = 1.25, maxStack = 1, durability = 256, damage = 3, type = "hoe", texture = {_, colors.lightGray, "j"}},
    
-    [115] = {name = "Gold Sword", durability = 512, damage = 6, type = "sword", texture = {_, colors.yellow, "/"}},
-    [116] = {name = "Gold Pickaxe", durability = 512, damage = 5, type = "pickaxe", texture = {_, colors.yellow, "T"}},
-    [117] = {name = "Gold Axe", durability = 512, damage = 5, type = "axe", texture = {_, colors.yellow, "P"}},
-    [118] = {name = "Gold Shovel", durability = 512, damage = 5, type = "shovel", texture = {_, colors.yellow, "!"}},
-    [119] = {name = "Gold Hoe", durability = 512, damage = 4, type = "hoe", texture = {_, colors.yellow, "j"}},
+    [115] = {name = "Gold Sword", energy = 1.75, maxStack = 1, durability = 512, damage = 6, type = "sword", texture = {_, colors.yellow, "/"}},
+    [116] = {name = "Gold Pickaxe", energy = 1.75, maxStack = 1, durability = 512, damage = 5, type = "pickaxe", texture = {_, colors.yellow, "T"}},
+    [117] = {name = "Gold Axe", energy = 1.75, maxStack = 1, durability = 512, damage = 5, type = "axe", texture = {_, colors.yellow, "P"}},
+    [118] = {name = "Gold Shovel", energy = 1.5, maxStack = 1, durability = 512, damage = 5, type = "shovel", texture = {_, colors.yellow, "!"}},
+    [119] = {name = "Gold Hoe", energy = 1.5, maxStack = 1, durability = 512, damage = 4, type = "hoe", texture = {_, colors.yellow, "j"}},
 
-    [120] = {name = "Gem Sword", durability = 1024, damage = 7, type = "sword", texture = {_, colors.lightBlue, "/"}},
-    [121] = {name = "Gem Pickaxe", durability = 1024, damage = 6, type = "pickaxe", texture = {_, colors.lightBlue, "T"}},
-    [122] = {name = "Gem Axe", durability = 1024, damage = 6, type = "axe", texture = {_, colors.lightBlue, "P"}},
-    [123] = {name = "Gem Shovel", durability = 1024, damage = 6, type = "shovel", texture = {_, colors.lightBlue, "!"}},
-    [124] = {name = "Gem Hoe", durability = 1024, damage = 5, type = "hoe", texture = {_, colors.lightBlue, "j"}},
+    [120] = {name = "Gem Sword", energy = 2, maxStack = 1, durability = 1024, damage = 7, type = "sword", texture = {_, colors.lightBlue, "/"}},
+    [121] = {name = "Gem Pickaxe", energy = 2, maxStack = 1, durability = 1024, damage = 6, type = "pickaxe", texture = {_, colors.lightBlue, "T"}},
+    [122] = {name = "Gem Axe", energy = 2, maxStack = 1, durability = 1024, damage = 6, type = "axe", texture = {_, colors.lightBlue, "P"}},
+    [123] = {name = "Gem Shovel", energy = 1.75, maxStack = 1, durability = 1024, damage = 6, type = "shovel", texture = {_, colors.lightBlue, "!"}},
+    [124] = {name = "Gem Hoe", energy = 1.75, maxStack = 1, durability = 1024, damage = 5, type = "hoe", texture = {_, colors.lightBlue, "j"}},
 
-    [150] = {name = "Punch", damage = 1, type = "punch", texture = {_, colors.yellow, "@"}},
-    [151] = {name = "Bow", durability = 256, damage = 1, type = "bow", projectile = 152, texture = {_, colors.brown, "}"}},
+    [150] = {name = "Punch", maxStack = 1, damage = 1, type = "punch", texture = {_, colors.yellow, "@"}},
+    [151] = {name = "Bow", energy = 2, maxStack = 1, durability = 256, damage = 1, type = "bow", ammo = 480, texture = {["right"] = {_, colors.brown, "}"}, ["left"] = {_, colors.brown, "{"}, ["up"] = {_, colors.brown, "^"}, ["down"] = {_, colors.brown, "V"}}},
 
     -- [Items] --
     [207] = {name = "Seeds", placeableFarm = 59, type = "item", texture = {_, colors.green, ";"}},
     [208] = {name = "Wheat", type = "item", texture = {_, colors.yellow, "#"}},
       
-    [209] = {name = "Bread", replenish = 8, type = "food", texture = {_, colors.brown, "B"}},
-    [210] = {name = "Apple", replenish = 4, type = "food", texture = {_, colors.red, "o"}},
+    [209] = {name = "Bread", replenish = 4, type = "food", texture = {_, colors.brown, "B"}},
+    [210] = {name = "Apple", replenish = 2, type = "food", texture = {_, colors.red, "o"}},
     [211] = {name = "Raw Beef", replenish = 2, type = "food", texture = {_, colors.red, "&"}},
-    [212] = {name = "Cooked Beef", replenish = 10, type = "food", texture = {_, colors.brown, "&"}},
+    [212] = {name = "Cooked Beef", replenish = 6, type = "food", texture = {_, colors.brown, "&"}},
       
     [213] = {name = "Coal", type = "item", texture = {_, colors.black, "o"}},
     -- 214, 215
@@ -256,25 +276,63 @@ function File.getAssets()
     [219] = {name = "Slime", type = "item", texture = {_, colors.lime, "o"}},
     [220] = {name = "Glass", type = "item", texture = {_, colors.white, "L"}},
     [221] = {name = "Wool", type = "item", texture = {_, colors.white, "#"}},
-    [222] = {name = "Glw. Dust", type = "item", texture = {_, colors.yellow, "*"}},
+    [222] = {name = "Glst. Dust", type = "item", texture = {_, colors.yellow, "*"}},
     -- 223 - 225
     [226] = {name = "Stick", type = "item", texture = {_, colors.brown, "/"}},
 
     [229] = {name = "Potato", replenish = 1, placeableFarm = 70, type = "food", texture = {_, colors.yellow, "o"}},
-    [230] = {name = "Baked Potato", replenish = 4, type = "food", texture = {_, colors.brown, "o"}},
+    [230] = {name = "Baked Potato", replenish = 3, type = "food", texture = {_, colors.brown, "o"}},
     [231] = {name = "Carrot", replenish = 1, placeableFarm = 72, type = "food", texture = {_, colors.orange, "V"}},
-    [232] = {name = "Baked Carrot", replenish = 4, type = "food", texture = {_, colors.brown, "V"}},
+    [232] = {name = "Baked Carrot", replenish = 3, type = "food", texture = {_, colors.brown, "V"}},
     [233] = {name = "Raw Pork", replenish = 2, type = "food", texture = {_, colors.red, "$"}},
-    [234] = {name = "Cooked Pork", replenish = 8, type = "food", texture = {_, colors.yellow, "$"}},
-
-    [235] = {name = "Redstone", type = "item", texture = {_, colors.red, "*"}},
-    -- 236 - 240
+    [234] = {name = "Cooked Pork", replenish = 6, type = "food", texture = {_, colors.yellow, "$"}},
+    -- 235 - 240
 
     [241] = {name = "Chains", type = "item", texture = {_, colors.lightGray, "#"}},
     [242] = {name = "String", type = "item", texture = {_, colors.white, "~"}},
     [243] = {name = "Bone", type = "item", texture = {_, colors.white, "/"}},
     [244] = {name = "Rotten Flesh", replenish = 0.5, type = "food", texture = {_, colors.green, "&"}},
-    -- 300 - 319, Reserved for armors.
+    [245] = {name = "Spider Eye", replenish = 0.5, type  = "food", texture = {_, colors.red, "6"}},
+
+    [260] = {name = "Spawn Egg - Cow", type = "block", interactOn = function(dim, x, y) spawnEntity(dim, x, y, 450) end, texture = {_, colors.brown, "@"}},
+    [261] = {name = "Spawn Egg - Pig", type = "block", interactOn = function(dim, x, y) spawnEntity(dim, x, y, 451) end, texture = {_, colors.pink, "@"}},
+    [262] = {name = "Spawn Egg - Sheep", type = "block", interactOn = function(dim, x, y) spawnEntity(dim, x, y, 452) end, texture = {_, colors.white, "@"}},
+    [263] = {name = "Spawn Egg - Zombie", type = "block", interactOn = function(dim, x, y) spawnEntity(dim, x, y, 400) end, texture = {_, colors.green, "@"}},
+    [264] = {name = "Spawn Egg - Skeleton", type = "block", interactOn = function(dim, x, y) spawnEntity(dim, x, y, 401) end, texture = {_, colors.white, ">"}},
+    [265] = {name = "Spawn Egg - Spider", type = "block", interactOn = function(dim, x, y) spawnEntity(dim, x, y, 402) end, texture = {_, colors.black, "$"}},
+
+    -- [Armor] --
+    -- Each tier has it's .5 rounded down (24.5 -> 24, 52.5 -> 52, etc...)
+
+    -- Cloth [1st tier]: 7 Armor Points Total, 24.5% Damage Reduction
+    [300] = {name = "Cloth Helmet", durability = 64, protection = 1, type = "helmet", texture = {_, colors.brown, "^"}},
+    [301] = {name = "Cloth Chestplate", durability = 64, protection = 3, type = "chestplate", texture = {_, colors.brown, "@"}},
+    [302] = {name = "Cloth Leggings", durability = 64, protection = 2, type = "leggings", texture = {_, colors.brown, "H"}},
+    [303] = {name = "Cloth Boots", durability = 64, protection = 1, type = "boots", texture = {_, colors.brown, ":"}},
+    
+    -- Chainmail [2nd tier]: 11 Armor Points Total, 38.5% Damage Reduction
+    [304] = {name = "Chainmail Helmet", durability = 128, protection = 2, type = "helmet", texture = {_, colors.lightGray, "^"}},
+    [305] = {name = "Chainmail Chestplate", durability = 128, protection = 4, type = "chestplate", texture = {_, colors.lightGray, "@"}},
+    [306] = {name = "Chainmail Leggings", durability = 128, protection = 3, type = "leggings", texture = {_, colors.lightGray, "H"}},
+    [307] = {name = "Chainmail Boots", durability = 128, protection = 2, type = "boots", texture = {_, colors.lightGray, ":"}},
+    
+    -- Iron [3rd tier]: 15 Armor Points Total, 52.5% Damage Reduction
+    [308] = {name = "Iron Helmet", durability = 256, protection = 3, type = "helmet", texture = {_, colors.lightGray, "^"}},
+    [309] = {name = "Iron Chestplate", durability = 256, protection = 5, type = "chestplate", texture = {_, colors.lightGray, "@"}},
+    [310] = {name = "Iron Leggings", durability = 256, protection = 4, type = "leggings", texture = {_, colors.lightGray, "H"}},
+    [311] = {name = "Iron Boots", durability = 256, protection = 3, type = "boots", texture = {_, colors.lightGray, ":"}},
+    
+    -- Gold [4th tier]: 19 Armor Points Total, 66.5% Damage Reduction
+    [312] = {name = "Gold Helmet", durability = 512, protection = 4, type = "helmet", texture = {_, colors.yellow, "^"}},
+    [313] = {name = "Gold Chestplate", durability = 512, protection = 6, type = "chestplate", texture = {_, colors.yellow, "@"}},
+    [314] = {name = "Gold Leggings", durability = 512, protection = 5, type = "leggings", texture = {_, colors.yellow, "H"}},
+    [315] = {name = "Gold Boots", durability = 512, protection = 4, type = "boots", texture = {_, colors.yellow, ":"}},
+    
+    -- Gem [5th tier]: 23 Armor Points Total, 80.5% Damage Reduction
+    [316] = {name = "Gem Helmet", durability = 1024, protection = 5, type = "helmet", texture = {_, colors.lightBlue, "^"}},
+    [317] = {name = "Gem Chestplate", durability = 1024, protection = 7, type = "chestplate", texture = {_, colors.lightBlue, "@"}},
+    [318] = {name = "Gem Leggings", durability = 1024, protection = 6, type = "leggings", texture = {_, colors.lightBlue, "H"}},
+    [319] = {name = "Gem Boots", durability = 1024, protection = 5, type = "boots", texture = {_, colors.lightBlue, ":"}},
     
     -- [Entitys] --
     -- Proposed method for bigger entities                                                     >
@@ -284,15 +342,17 @@ function File.getAssets()
     --      [0] = {["up"] = {_, colors.white, "^"}, ["down"] = {_, colors.white, "V"}, ["left"] = {_, colors.white, "<"}, ["right"] = {_, colors.white, ">"}}
     --      [1] = {["up"] = {_, colors.white, "^"}, ["down"] = {_, colors.white, "V"}, ["left"] = {_, colors.white, "<"}, ["right"] = {_, colors.white, ">"}}
     --  }
-    [400] = {name = "Zombie", health = 20, weapon = 150, type = "undead", drop = {244, 2}, texture = {colors.lime, "@"}, script = hostileMobScript},
-    [401] = {name = "Skeleton", health = 20, weapon = 151, type = "undead", drop = {243, 2}, texture = {colors.white, "^"}, script = hostileMobScript},
-    [402] = {name = "Spider", health = 16, weapon = 150, type = "living", drop = {242, 2}, texture = {colors.black, "@"}, script = hostileMobScript},
+    [400] = {name = "Zombie", health = 20, weapon = 150, speed = 10, type = "undead", drop = {244, 2}, texture = {colors.green, "@"}, script = hostileMobScript},
+    [401] = {name = "Skeleton", health = 20, weapon = 151, speed = 10, type = "undead", drop = {243, 2}, texture = {colors.white, "^"}, script = hostileMobScript},
+    [402] = {name = "Spider", health = 16, weapon = 150, speed = 8, type = "living", drop = {242, 1, 245, 1}, texture = {colors.black, "$"}, script = hostileMobScript},
 
-    [450] = {name = "Cow", health = 16, type = "living", drop = {211, 2}, texture = {colors.brown, "@"}, script = passiveMobScript},
-    [451] = {name = "Pig", health = 16, type = "living", drop = {233, 2}, texture = {colors.pink, "@"}, script = passiveMobScript},
-    [452] = {name = "Sheep", health = 10, type = "living", drop = {221, 2}, texture = {colors.white, "@"}, script = passiveMobScript},
+    [450] = {name = "Cow", health = 16, speed = 8, type = "living", drop = {211, 2}, texture = {colors.brown, "@"}, script = passiveMobScript},
+    [451] = {name = "Pig", health = 16, speed = 8, type = "living", drop = {233, 2}, texture = {colors.pink, "@"}, script = passiveMobScript},
+    [452] = {name = "Sheep", health = 10, speed = 8, type = "living", drop = {221, 2}, texture = {colors.white, "@"}, script = passiveMobScript},
     
-    [480] = {name = "Arrow", life = 10, damage = 3, type = "projectile", texture = {colors.white, "-", colors.white, "|"}},
-    [481] = {name = "Snowball", life = 10, damage = 0.1, type = "projectile", texture = {colors.white, "o"}}
-    }
-end
+    [480] = {name = "Arrow", distance = 10, damage = 4, speed = 1, type = "projectile", texture = {colors.white, "-"}, script = shootProjectile},
+    [481] = {name = "Snowball", distance = 10, damage = 0, speed = 3, type = "projectile", texture = {colors.white, "o"}, script = shootProjectile},
+
+    getVersion = function() return "2.x Alpha" end,
+    getVersionRelease = function() return "10/xx/15" end
+}
