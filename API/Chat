@@ -1,5 +1,6 @@
 local Assets = require "Assets"
 local Screen = require "API/Buffer" 
+local Player = require "API/Player"
 
 local colorCodes = {["0"] = colors.black, ["1"] = colors.blue, ["2"] = colors.green, ["3"] = colors.cyan, ["4"] = colors.red, ["5"] = colors.purple, ["6"] = colors.orange, ["7"] = colors.lightGray, ["8"] = colors.gray, ["9"] = colors.magenta, a = colors.lime, b = colors.lightBlue, c = colors.brown, d = colors.pink, e = colors.yellow, f = colors.white}
 local convertToColorCode = {[colors.black] = 0, [colors.blue] = 1, [colors.green] = 2, [colors.cyan] = 3, [colors.red] = 4, [colors.purple] = 5, [colors.orange] = 6, [colors.lightGray] = 7, [colors.gray] = 8, [colors.magenta] = 9, [colors.lime] = "a", [colors.lightBlue] = "b", [colors.brown] = "c", [colors.pink] = "d", [colors.yellow] = "e", [colors.white] = "f"}
@@ -41,115 +42,45 @@ end
 
 local chatFunctions = {
     ["/give"] = function(args, playerName)
-        if not args[2] or not args[3] then addMessage("&7" ..args[1].. " <player> <id> [amount]"); return end
-        if not Player.isPlayer(args[2]) then addMessage("&7No such player " ..args[2]); return end
-        local itemID = tonumber(args[3])
-        if type(itemID) ~= "number" then 
-            if type(tostring(args[3])) ~= "string" then addMessage("&7<id> must be a numerical id or name of an asset"); return end
-            itemID = Level.convertID(args[3])
-        end
-        if not itemID or not Assets[itemID] then addMessage("&7No such asset with id " ..itemID); return end
-        local amount = tonumber(args[4]) or (Assets[tonumber(args[3])] and Assets[tonumber(args[3])].maxStack) or 99
-        if type(amount) ~= "number" then addMessage("&7[amount] must be a number"); return end
-        Player.giveItem(args[2], itemID, amount)
-        addMessage("&7Gave " ..amount.. " " ..Level.convertID(itemID).. " to " ..args[2])
     end,
 
     ["/gamemode"] = function(args, playerName)
-        local player = args[3] or playerName
-        if not args[2] then addMessage("&7" ..args[1].. " <mode> [player]"); return end
-        if not Player.isPlayer(player) then addMessage("&7No such player " ..player); return end
-        if type(tonumber(args[2])) ~= "number" and args[2] ~= "s" and args[2] ~= "survival" and args[2] ~= "c" and args[2] ~= "creative" then addMessage("&7No such gamemode " ..args[2]); return end
-        if args[2] == "s" or args[2] == "survival" then args[2] = "0" elseif args[2] == "c" or args[2] == "creative" then args[2] = "1" end
-        Player.setMode(player, tonumber(args[2]))
-        if args[2] == "0" then args[2] = "survival" elseif args[2] == "1" then args[2] = "creative" end
-        addMessage("<&4Server&f> Set " ..player.. "'s gamemode to " ..args[2])
     end,
 
     ["/whisper"] = function(args, playerName)
-        if not args[2] or not args[3] then addMessage("&7" ..args[1].. " <player> <message>"); return end
-        if not Player.isPlayer(args[2]) then addMessage("&7No such player " ..args[2]); return end
     end,
 
     ["/tp"] = function(args, playerName)
-        if not args[2] or not args[3] or not args[4] then addMessage("&7/tp <player> <x> <y>"); return end
-        if not Player.isPlayer(args[2]) then addMessage("&7No such player " ..args[2]); return end
-        local tpx, tpy = tonumber(args[3]), tonumber(args[4]); local maxX, maxY = Level.getSize()
-        if type(tpx) ~= "number" or type(tpy) ~= "number" then addMessage("&7<x> and <y> must be number values!"); return end
-        if tpx < 1 or tpy < 1 or tpx > maxX or tpy > maxY then addMessage("&7Given coordinates are out of range."); return end
-
-        local currentPlayerX, currentPlayerY = Player.getCoordinates(args[2])
-        local differenceX, differenceY = args[3] - currentPlayerX, args[4] - currentPlayerY
-        local currentOffsetX, currentOffsetY = Level.getOffset()
-        Player.setCoordinates(args[2], tonumber(args[3]), tonumber(args[4]))
-        Level.setOffset(currentOffsetX + differenceX, currentOffsetY + differenceY)
-        addMessage("<&4Server&f> Teleported " ..args[2].. " to " ..args[3].. ", " ..args[4])
     end,
 
     ["/warp"] = function(args, playerName)
-        if not args[2] or not args[3] then addMessage("&7/warp <player> <dimension>"); return end
-        if not Player.isPlayer(args[2]) then addMessage("&7No such player " ..args[2]); return end
-        Player.setDimension(args[2], tonumber(args[3]))
-        addMessage("<&4Server&f> Warped " ..args[2].. " to level " ..args[3])
     end,
 
     ["/say"] = function(args, playerName)
-        local tString = ""
-        for i = 1, #args - 1 do tString = tString.. " " ..args[i + 1] end
-        addMessage("<&4Server&f> " ..tString)
     end,
 
     ["/save"] = function(args, playerName)
-        File.saveWorld(File.getCurrentWorldName()); addMessage("<&4Server&f> World Saved")
     end,
 
     ["/spawn"] = function(args, playerName)
-        local spawnPoint = Level.getSpawnPoint()
-        local currentPlayerX, currentPlayerY = Player.getCoordinates(playerName)
-        local differenceX, differenceY = spawnPoint[1] - currentPlayerX, spawnPoint[2] - currentPlayerY
-        local currentOffsetX, currentOffsetY = Level.getOffset()
-        Player.setCoordinates(playerName, spawnPoint[1], spawnPoint[2])
-        Level.setOffset(currentOffsetX + differenceX, currentOffsetY + differenceY)
-        addMessage("&7Teleporting to spawn point")
     end,
 
     ["/setspawn"] = function(args, playerName)
-        local spawnPoint = {Player.getCoordinates(playerName)}
-        Level.setSpawnPoint(spawnPoint)
-        addMessage("&7Spawn set to X: " ..spawnPoint[1].. ", Y: " ..spawnPoint[2])
     end,
 
     ["/time"] = function(args, playerName)
-        local keyTimes = {["dawn"] = 6, ["sunrise"] = 6.4, ["day"] = 8, ["noon"] = 12, ["afternoon"] = 16, ["evening"] = 18, ["sunset"] = 19.4, ["night"] = 20, ["dusk"] = 20, ["midnight"] = 24}
-        if (not args[2] or not args[3]) or args[2] ~= "set" then addMessage("&7/time set <time>"); return end
-        if keyTimes[args[3]] then Level.setTime(keyTimes[args[3]]); addMessage("<&4Server&f> Time set to " ..textutils.formatTime(keyTimes[args[3]])); return end
-        if type(tonumber(args[3])) ~= "number" then addMessage("&7<time> must be a number between 0 and 24!"); return end
-        if tonumber(args[3]) < 0 or tonumber(args[3]) > 24 then addMessage("&7<time> must be a number between 0 and 24!"); return end
-        Level.setTime(tonumber(args[3])); addMessage("<&4Server&f> Time set to " ..textutils.formatTime(tonumber(args[3])))
     end,
 
     ["/heal"] = function(args, playerName)
-        local player = args[2] or playerName
-        if not Player.isPlayer(player) then addMessage("&7No such player " ..tostring(player)); return end
-        Player.setHealth(player, 20)
-        addMessage("&7Fully healed " ..player)
     end,
 
     ["/kill"] = function(args, playerName)
-        local player = args[2] or playerName
-        if not Player.isPlayer(player) then addMessage("&7No such player " ..tostring(player)); return end
-        Player.setHealth(player, 0)
-        addMessage("&7Killed " ..player)
     end,
 
     ["/run"] = function(args, playerName)
-        addMessage("&7Running code."); table.remove(args, 1)
-        addMessage("Returned: " ..tostring(assert(loadstring(table.concat(args, " ")))()))
     end,
 
     ["/help"] = function(args, playerName)
-        if Level.isSingleplayer() then addMessage("&e/give, /gamemode, /whisper, /tp, /warp, /say, /save, /spawn, /setspawn, /time, /heal, /kill, /seed") else
-        addMessage("&e/give, /gamemode, /whisper, /tp, /warp, /say, /save, /spawn, /setspawn, /time, /heal, /kill, /seed, /kick, /ban, /unban, /op, /stop, /restart") end
     end,
 
     -- Server related commands
@@ -178,7 +109,6 @@ local chatFunctions = {
     end,
 
     ["/seed"] = function(args, playerName)
-        addMessage("&7World seed: " ..Level.getSeed())
     end
 }
 
@@ -220,7 +150,7 @@ return {
         if type(message) == "string" and message ~= "" then 
             if sub(message, 1, 1) == "/" then
                 args = {}; for s in gmatch(message, "([^%s]+)") do args[#args + 1] = s end
-                local result = chatFunctions[args[1]] and chatFunctions[args[1]](args, playerName) or addMessage("&7No such command"); args = nil
+                local result = chatFunctions[args[1]] and chatFunctions[args[1]](args, Player.player(playerName)) or addMessage("&7No such command"); args = nil
             else addMessage(playerName and "&f<" ..playerName.. "&f> " ..message or message) end
         end
     end

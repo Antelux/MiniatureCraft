@@ -1,4 +1,4 @@
-local Keybindings = {up = keys.w, down = keys.s, left = keys.a, right = keys.d, lock = keys.leftShift, interact = keys.e, useItem = keys.space, pause = keys.backspace, chat = keys.t, hideGUI = keys.f1, screenshot = keys.f2, showDebug = keys.f3}
+local Keybindings = {up = keys.w, down = keys.s, left = keys.a, right = keys.d, lock = keys.leftShift, interact = keys.e, useItem = keys.space, pause = keys.backspace, chat = keys.t, showHUD = keys.f1, screenshot = keys.f2, showDebug = keys.f3, sprint = keys.r}
 local MainFolder = ...
 
 Keybindings.save = function()

@@ -4,9 +4,11 @@ local Time, Spawn, WorldName = math.random(8, 12), {}
 local Seed = math.random(os.time() * 1000000)
 local Chunks, chunks_cache = {[-3] = {}, [-2] = {}, [-1] = {}, [0] = {}, [1] = {}}, {}
 local Asset_Cache = {}; for k, v in pairs(Assets) do if type(v) == "number" then Asset_Cache[v.name] = k end end
-local random, randomseed, floor = math.random, math.randomseed, math.floor
+local random, randomseed, floor, abs = math.random, math.randomseed, math.floor, math.abs
 local Noise_FBM = Noise.FBM
 local remove = table.remove
+local loadedStructures = {}
+local MainFolder = ...
 local ty = type
 
 local function isString(s) return ty(s) == "string"  end
@@ -14,6 +16,274 @@ local function isNumber(n) return ty(n) == "number"  end
 local function isBool(b)   return ty(b) == "boolean" end
 local function isTable(t)  return ty(t) == "table"   end
 local function isNil(n)    return ty(n) == "nil"     end
+
+-- The functions "compressCoroutine," "decompressCoroutine," and "open" are functions of a program called Package.
+-- It was created by Jeffrey Alexander (aka Bomb Bloke), and I'm blown away by how much it reduced save sizes (No pun intended).
+-- More on Package: http://www.computercraft.info/forums2/index.php?/topic/21801-package-pastebin-uploader-downloader/
+local function compressCoroutine(ClearCode)
+  local startCodeSize = 1
+  while math.pow(2, startCodeSize) < ClearCode do startCodeSize = startCodeSize + 1 end
+  
+  local EOI, ClearCode = math.pow(2, startCodeSize) + 1, math.pow(2, startCodeSize)
+  startCodeSize = startCodeSize + 1
+  
+  local curbit, curbyte, outputlist, codes, CodeSize, MaxCode, nextcode, curcode, incode = 1, 0, {0}, {}, startCodeSize, math.pow(2, startCodeSize) - 1, EOI + 1, coroutine.yield()
+
+  local function packByte(num)
+    local mask = 1
+
+    for i = 1, CodeSize do
+      if bit.band(num, mask) == mask then curbyte = curbyte + curbit end
+      curbit, mask = curbit * 2, mask * 2
+
+      if curbit > 128 or (i == CodeSize and num == EOI) then
+        local counter = bit.blshift(bit.brshift(#outputlist - 1, 8), 8) + 1
+        outputlist[counter] = outputlist[counter] + 1
+
+        if outputlist[counter] > 255 then
+          outputlist[counter] = 255
+          outputlist[counter + 256] = 1
+        end
+
+        outputlist[#outputlist + 1] = curbyte
+        curbit, curbyte = 1, 0
+      end
+    end
+  end
+
+  packByte(ClearCode)
+
+  while true do
+    if #outputlist > 256 then
+      local keep = {}
+      for i = 257, #outputlist do
+        keep[#keep + 1] = outputlist[i]
+        outputlist[i] = nil
+      end
+      incode = coroutine.yield(unpack(outputlist))
+      outputlist = keep
+    else incode = coroutine.yield() end
+    
+    if not incode then
+      packByte(curcode)
+      packByte(EOI)
+      return unpack(outputlist)
+    end
+    
+    if not codes[curcode] then codes[curcode] = {} end
+
+    if not codes[curcode][incode] then
+      codes[curcode][incode] = nextcode
+      nextcode = nextcode + 1
+
+      packByte(curcode)
+
+      if nextcode == MaxCode + 2 then
+        CodeSize = CodeSize + 1
+        MaxCode = math.pow(2, CodeSize) - 1
+      end
+
+      if nextcode == 4095 then
+        packByte(ClearCode)
+        CodeSize, MaxCode, nextcode, codes = startCodeSize, math.pow(2, startCodeSize) - 1, EOI + 1, {}
+      end
+
+      curcode = incode
+    else curcode = codes[curcode][incode] end
+  end
+end
+
+local function decompressCoroutine(ClearCode)
+  local startCodeSize = 1
+  while math.pow(2, startCodeSize) < ClearCode do startCodeSize = startCodeSize + 1 end
+  
+  local EOI, ClearCode = math.pow(2, startCodeSize) + 1, math.pow(2, startCodeSize)
+  startCodeSize = startCodeSize + 1
+
+  local lastcounter = coroutine.yield()
+  local outputlist, bytenum, CodeSize, MaxCode, curbyte, maskbit, nextcode, codes, gotbytes = {}, 0, startCodeSize, math.pow(2, startCodeSize) - 1, coroutine.yield(), 1, EOI + 1, {}, 1
+  for i = 0, ClearCode - 1 do codes[i] = {[0] = i} end
+
+  while true do
+    local curcode, curbit = 0, 1
+
+    for i = 1, CodeSize do
+      if bit.band(curbyte, maskbit) == maskbit then curcode = curcode + curbit end
+      curbit, maskbit = curbit * 2, maskbit * 2
+
+      if maskbit > 128 then
+        maskbit, curbyte, gotbytes = 1, coroutine.yield(unpack(outputlist)), gotbytes + 1
+        outputlist = {}
+        
+        if gotbytes > lastcounter and curbyte then
+          lastcounter = curbyte
+          curbyte = coroutine.yield()
+          gotbytes = 1
+        end
+      end
+    end
+
+    if curcode == ClearCode then
+      CodeSize, MaxCode, nextcode, codes = startCodeSize, math.pow(2, startCodeSize) - 1, EOI + 1, {}
+      for i = 0, ClearCode - 1 do codes[i] = {[0] = i} end
+    elseif curcode ~= EOI then
+      if codes[nextcode - 1] then codes[nextcode - 1][#codes[nextcode - 1] + 1] = codes[curcode][0] else codes[nextcode - 1] = {[0] = codes[curcode][0]} end
+
+      if nextcode < 4096 then
+        codes[nextcode] = {}
+        for i = 0, #codes[curcode] do codes[nextcode][i] = codes[curcode][i] end
+        nextcode = nextcode + 1
+      end
+
+      if nextcode - 2 == MaxCode then
+        CodeSize = CodeSize + 1
+        MaxCode = math.pow(2, CodeSize) - 1
+      end
+
+      for i = 0, #codes[curcode] do outputlist[#outputlist + 1] = codes[curcode][i] end
+    else return unpack(outputlist) end
+  end
+end
+
+local function open(file, mode, valRange)
+  if (type(file) ~= "table" and type(file) ~= "string") or type(mode) ~= "string" then error("package.open: Expected: file (string or handle), mode (string). Got: " .. type(file) .. ", " .. type(mode) .. ".", 2) end
+
+  mode = mode:lower()
+  local binary, append, read, write, newhandle = mode:find("b") ~= nil, mode:sub(1, 1) == "a", mode:sub(1, 1) == "r", mode:sub(1, 1) == "w", {}
+
+  if not valRange then valRange = binary and 256 or 128 end
+  if type(valRange) ~= "number" or valRange < 2 or valRange > 256 then error("package.decompress: Value range must be a number between 2 - 256. Got: " .. valRange, 2) end
+
+  if not (append or write or read) then error("package.open: Invalid file mode: " .. mode, 2) end
+
+  if type(file) == "string" then
+    if append and fs.exists(file) then
+      local oldfile = open(file, "r" .. (binary and "b" or ""), valRange)
+      if not oldfile then return nil end
+
+      if binary then
+        local olddata = {}
+        for byte in oldfile.read do olddata[#olddata + 1] = byte end
+        oldfile.close()
+        newhandle = open(file, "wb", valRange)
+        for i = 1, #olddata do newhandle.write(olddata[i]) end
+      else
+        local olddata = oldfile.readAll()
+        oldfile.close()
+        newhandle = open(file, "w", valRange)
+        newhandle.write(olddata)
+      end
+
+      return newhandle
+    end
+
+    file = fs.open(file, mode:sub(1, 1) .. "b")
+    if not file then return nil end
+  else
+    if (write and (file.writeLine or not file.write)) or (read and not file.read) then error("package.open: Handle / mode mismatch.", 2) end
+
+    local tempfile, keys = {}, {}
+
+    for key, _ in pairs(file) do keys[#keys + 1] = key end
+    for i = 1, #keys do
+      tempfile[keys[i]] = file[keys[i]]
+      file[keys[i]] = nil
+    end
+
+    file = tempfile
+  end
+
+  if read then
+    local decompressCo, outputlist = coroutine.create(decompressCoroutine), {}
+    coroutine.resume(decompressCo, valRange)
+
+    local function getVal()
+      if #outputlist == 0 and coroutine.status(decompressCo) == "dead" then return nil end
+
+      while #outputlist == 0 and coroutine.status(decompressCo) ~= "dead" do
+        local fileRead = file.read()
+        if not fileRead then return nil end
+        local output = {coroutine.resume(decompressCo, fileRead)}
+        for j = #output, 2, -1  do outputlist[#outputlist + 1] = output[j] end
+      end
+
+      return table.remove(outputlist, #outputlist)
+    end
+
+    if binary then
+      newhandle.read = getVal
+    else
+      function newhandle.readLine()
+        local line = {}
+
+        repeat
+          local inVal = getVal()
+          if inVal then
+            line[#line + 1] = inVal
+          else
+            newhandle.readLine = function() return nil end
+            newhandle.readAll = newhandle.readLine
+            return #line > 0 and string.char(unpack(line)) or nil
+          end
+        until line[#line] == 10
+
+        line[#line] = nil
+        if line[#line] == 13 then line[#line] = nil end
+        return string.char(unpack(line))
+      end
+
+      function newhandle.readAll()
+        local lines = {}
+        for line in newhandle.readLine do lines[#lines + 1] = line end
+        return table.concat(lines, "\n")
+      end
+    end
+
+    function newhandle.extractHandle()
+      local keys = {}
+      for key, _ in pairs(newhandle) do keys[#keys + 1] = key end
+      for i = 1, #keys do newhandle[keys[i]] = nil end
+      return file
+    end
+  else
+    local compressCo = coroutine.create(compressCoroutine)
+    coroutine.resume(compressCo, valRange)
+
+    local function writeVal(inVal)
+      local output = {coroutine.resume(compressCo, inVal)}
+      for j = 2, #output do file.write(output[j]) end
+    end
+
+    if binary then
+      newhandle.write = writeVal
+    else
+      function newhandle.write(text)
+        for i = 1, #text do writeVal(text:byte(i)) end
+      end
+
+      function newhandle.writeLine(text)
+        newhandle.write(text .. "\n")
+      end
+    end
+
+    newhandle.flush = file.flush
+
+    function newhandle.extractHandle()
+      local output = {coroutine.resume(compressCo, false)}
+      for j = 2, #output do file.write(output[j]) end
+      local keys = {}
+      for key, _ in pairs(newhandle) do keys[#keys + 1] = key end
+      for i = 1, #keys do newhandle[keys[i]] = nil end
+      return file
+    end
+  end
+
+  function newhandle.close()
+    newhandle.extractHandle().close()
+  end
+
+  return newhandle
+end
 
 local function unloadChunkInternal(dim, x, y, rem)
     if not Chunks[dim][y] or not Chunks[dim][y][x] then return end
@@ -42,6 +312,70 @@ local function updateChunkInternal(dim, x, y)
     end
 end
 
+-- Optimize these structure functions
+local function loadStructureInternal(file, name)
+    if not fs.exists(file) then return end; if not isString(name) then return end
+    local structure = open(file, "rb"); local byteSize = structure.read()
+    if byteSize ~= 1 then error("This version of MiniatureCraft doesn't support " ..tonumber(byteSize).. " byte size.") end
+    local Chunk = {}; local sizeX, sizeY = structure.read(), structure.read()
+    for y = 1, sizeY do
+        Chunk[y] = {}
+        for x = 1, sizeX do
+            local tileID, blockID = structure.read(), structure.read()
+            Chunk[y][x] = {tileID ~= 0 and tileID, blockID ~= 0 and blockID}
+        end
+    end
+    loadedStructures[name] = Chunk
+    --error("Loaded " ..name)
+end
+
+-- Add parameters for if it needs a clear space or not to be placed
+local function placeStructureInternal(structure, dim, x, y, chunk)
+    local cx, cy = floor((x - 1) * 0.0625), floor((y - 1) * 0.0625)
+    local currentChunk
+    if chunk then currentChunk = chunk else
+        if not Chunks[dim][cy] or not Chunks[dim][cy][cx] then return end
+        currentChunk = Chunks[dim][cy][cx]
+    end
+
+    local currentStructure = loadedStructures[structure]; if not currentStructure then return end
+    local xc, yc = x - (cx * 16), y - (cy * 16)
+    local sizeX, sizeY = #currentStructure[1], #currentStructure
+
+    if xc + sizeX > 17 then return end --sizeX = xc + sizeX - 16; xc = xc - sizeX end
+    if yc + sizeY > 17 then return end --sizeY = yc + sizeY - 16; yc = yc - sizeY end
+
+    for y = 1, sizeY do
+        local line = currentChunk[y+yc-1]
+        for x = 1, sizeX do
+            local struc = currentStructure[y][x]
+            local tileID, blockID = struc[1], struc[2]
+            local spot = line[x+xc-1]
+            
+            if tileID then 
+                local tile = Assets[tileID]
+                if tile then 
+                    local speed = tile.animationSpeed 
+                    spot[1] = tileID; spot[2] = 1; spot[3] = speed and random(0, speed*10) * 0.1; spot[4] = tileData or spot[4]
+                end
+            end
+            if blockID then 
+                local block = Assets[blockID] 
+                if block then  
+                    local speed = block.animationSpeed
+                    spot[5] = blockID; spot[6] = 1; spot[7] = speed and random(0, speed*10) * 0.1; spot[8] = Assets[blockID].health; spot[9] = blockData or spot[9]
+                end
+            end
+        end
+    end
+end
+
+local structures = fs.list(MainFolder.. "/Structure/")
+for i = 1, #structures do
+    local fileName = structures[i]
+    loadStructureInternal(MainFolder.. "/Structure/" ..fileName, string.sub(fileName, 1, string.find(fileName, ".", 1, true) - 1))
+end
+
 return {
     loadChunk = function(dim, x, y)
         if Chunks[dim][y] and Chunks[dim][y][x] then return end
@@ -54,17 +388,25 @@ return {
         -- Draw accordingly in main loop
 
         if dim == 0 then
-            for y = 1, 16 do
-                newChunk[y] = {}
-                for x = 1, 16 do
-                    local elevation = Noise_FBM(8, cx + x, cy + y, 0.5, .007)
-                    randomseed(elevation * 100000000 + (x*y))--; random(); random(); random()
+            if random(10000) == 7 then
+                placeStructureInternal("village", 0, 1, 1, newChunk)
+            else
+                for y = 1, 16 do
+                    newChunk[y] = {}
+                    for x = 1, 16 do
+                        local elevation = Noise_FBM(8, cx + x, cy + y, 0.5, .007)
+                        randomseed(elevation * 100000000 + abs(x*y))--; random(); random(); random()
 
-                        if elevation <= .33 then newChunk[y][x] = {51, random(2), random(0, 5) * 0.1} -- Water
-                    elseif elevation <= .36 then newChunk[y][x] = {56} -- Sand
-                    elseif elevation <= .6  then newChunk[y][x] = {50, _, _, _, random(20) == 1 and random(26, 28) or nil} -- Grass / Flowers
-                    elseif elevation <= .7  then newChunk[y][x] = {69} -- Snow
-                    else newChunk[y][x] = {55, _, _, _, random(20) <= 18 and 1 or 8} end -- Stone/Coal Ore with dirt
+                            if elevation <= .33 then newChunk[y][x] = {51, random(2), random(0, 5) * 0.1} -- Water
+                        elseif elevation <= .36 then newChunk[y][x] = {56} -- Sand
+                        elseif elevation <= .6  then newChunk[y][x] = {50, _, _, _, random(20) == 1 and random(5, 7) or nil} -- Grass / Flowers
+                        elseif elevation <= .7  then newChunk[y][x] = {69} -- Snow
+                        else newChunk[y][x] = {55, _, _, _, random(20) <= 18 and 1 or 11} end -- Stone/Coal Ore with dirt
+                        
+                        if newChunk[y][x][1] == 50 and random(25) == 1 then 
+                            placeStructureInternal("tree", 0, x - 1, y - 2, newChunk)
+                        end
+                    end
                 end
             end
         end
@@ -153,16 +495,9 @@ return {
         local tile = spot[1]; if banned then for i = 1, #banned do if banned[i] == tile then return true end end end
     end,
 
-    convertID = function(id)
-        return (isString(id) and Asset_Cache[id]) or isNumber(id) and Assets[id] and Assets[id].name 
-    end,
-
-    loadStructure = function(file, name)
-        if not fs.exists(file) then return end
-
-    end,
-
+    loadStructure = function(file, name) loadStructureInternal(file, name) end,
     time = function(newTime) if isNumber(newTime) then Time = newTime else return Time end end,
+    convertID = function(id) return Asset_Cache[isString(id) and id] or Assets[isNumber(id) or id] and Assets[id].name end,
     spawn = function(x, y) if isNumber(x) and isNumber(y) then Spawn[1], Spawn[2] = x, y else return Spawn[1], Spawn[2] end end,
     seed = function(newSeed) if isNumber(seed) or isString(seed) then Seed = newSeed else return Seed end end,
     worldName = function(name) if isString(name) then WorldName = name else return WorldName end end

@@ -54,22 +54,32 @@
 
 	Current Changes:
 
-	-- Chat.addCommand(cmdName, function)
-	-- New start screen splash text.
-	-- New, easier error logging (with little messages in each error log).
-	-- require() function for use with mods and APIs. unload() removes any loaded files from memory.
-	-- reportError() function, which I need to tweak a bit.
-	-- 4 New Apis:
-	   Client, Server, Keyboard, & Timer
+	-- You can use the arrow keys (up & down) to change the asset you have selected.
+	-- Key system changed, much more responsive now.
+	-- Going diagonally no longer makes you go two blocks in one tick.
+	-- Added support for .structure files, and they're placed in the world.
+
+	Known Bugs:
+
+	-- FPS counter doesn't go off when you press F3 again.
+	-- When pressing F1, the screen no longer draws as fast as it should.
+	-- In game structures may be put too close to other ones.
 	
 	-----------------------------------------------------------------------------------------------------------
 
 	TODO:
+	
+	add the parameter "level" to tools and "requiredLevel" to blocks/tiles.
+	i.e. hard stone can have a requiredLevel of 5, which is the same level of a gem pickaxe.
+	only tools with the specified level or higher can break blocks that have the same level or lower.
+	in this case, only the gem pickaxe can damage hard stone.
 
+	clean up the Level API!
+
+	move the assets around to be more organized ID wise and stuffs.
+	
 	Add dungeons & Villages and stuffs
-	Make lighting more realisitc
-
-	draw heavy inspiration from the actual game. does things a lot more easily.
+	Make lighting more realisitc\
 
 	make ender pearl type thing
 	first wall it hits it tps you to
@@ -143,7 +153,7 @@ local viewWidth = ceil(ScreenWidth*0.0625)
 local viewHeight = ceil(ScreenHeight*0.0625)
 local player = Player.new(tArgs[1] or "Player", {color = colors[tArgs[2]], x = tonumber(tArgs[3]), y = tonumber(tArgs[4])})
 local ox, oy = floor(ScreenWidth*.5 + 0.5), floor(ScreenHeight*.5 + 0.5)
-local currentAsset = 1
+local showDebugInfo, showHUD = false, true; local currentAsset = 1
 
 --[[ Some example Shaders
 -- Confetti
@@ -178,17 +188,28 @@ local function drawWorld()
 	local direction = player.dir; local pixel = Screen[oy][ox]
 	pixel[2] = pixel[1] ~= player.color and player.color or colorChange[player.color]
 	pixel[3] = (direction == 1 and "^") or (direction == 2 and ">") or (direction == 3 and "V") or "<"
-	Buffer.setCursorPos(ox - floor(#player.name * 0.5), oy - 2)
-	Buffer.setBackgroundColor(colors.gray); Buffer.setTextColor(colors.white)
-	Buffer.write(player.name)
-	Buffer.draw()
+
+	if showHUD then
+		local playerName = player.name
+		Buffer.setCursorPos(ox - floor(#playerName * 0.5), oy - 2)
+		Buffer.setBackgroundColor(colors.gray); Buffer.setTextColor(colors.white)
+		Buffer.write(playerName)
+	end
 end
 
+local ticks, FPS = 0, 20
 local function drawGUI()
 	Buffer.setBackgroundColor(colors.black)
+
+	if showDebugInfo then
+		Buffer.setTextColor(colors.white)
+		Buffer.setCursorPos(1, 1)
+		Buffer.write("FPS: " ..FPS.. "   ")
+	end
+
 	Buffer.setCursorPos(3, 18)
-	Buffer.clearLine()
 	Buffer.setTextColor(colors.yellow)
+	Buffer.clearLine()
 	Buffer.write("MiniatureCraft " ..Assets.getVersion())
 
 	local str = "X: " ..player.x.. ", Y: " ..player.y
@@ -210,53 +231,65 @@ local function drawGUI()
 	Buffer.setBackgroundColor(bg)
 	Buffer.setTextColor(fg)
 	Buffer.write(tc)
-	Buffer.draw()
 end
 
-drawWorld(); drawGUI()
+for vy = 0, viewHeight do
+	for vx = 0, viewWidth do
+		Level.loadChunk(0, floor((player.x - ox - 1) * 0.0625) + vx, floor((player.y - oy - 1) * 0.0625) + vy)
+	end
+end
+
+drawWorld(); drawGUI(); Buffer.draw()
 local mods = Client.getMods()
+local FPSTimer = Timer.new()
+local moveTimer = Timer.new(0)
+
 while true do
-	local event, par1, par2, par3 = coroutine.yield(); local x, y = player.x, player.y
+	local event, par1, par2, par3 = coroutine.yield()
+	local x, y = player.x, player.y
 	local cx, cy = floor((x - ox - 1) * 0.0625), floor((y - oy - 1) * 0.0625)
 
 	if event == "timer" then
-		tick = os.startTimer(0.05)
-		for i = 1, #mods do 
-			--player.color = 2 ^ math.random(15)
-			mods[i].Tick() 
+		tick = os.startTimer(0.05); ticks = ticks + 1
+		for i = 1, #mods do mods[i].Tick() end
+		if ticks == 20 then ticks = 0; FPS = FPSTimer:passed() * 20; FPSTimer:restart() end
+
+		if moveTimer:wentOff() then
+			moveTimer:restart()
+			local mx = x + ((Keyboard.isDown(Keybindings.left) and (player:direction(4) or -1)) or (Keyboard.isDown(Keybindings.right) and (player:direction(2) or 1)) or 0)
+			local my = y + ((Keyboard.isDown(Keybindings.up) and (player:direction(1) or -1)) or (Keyboard.isDown(Keybindings.down) and (player:direction(3) or 1)) or 0)
+			if mx ~= x and not Level.checkForCollision(0, mx, y) then player.x = mx end; if my ~= y and not Level.checkForCollision(0, player.x, my) then player.y = my end
 		end
 
+		local cx, cy = floor((x - ox - 1) * 0.0625), floor((y - oy - 1) * 0.0625)
 		for vy = 0, viewHeight do
 			for vx = 0, viewWidth do
-				Level.updateChunk(0, cx + vx, cy + vy)
+				Level.loadChunk(0, cx + vx, cy + vy)
+				--Level.updateChunk(0, cx + vx, cy + vy)
 			end
 		end
-		drawWorld()
+		drawWorld(); Buffer.draw()
 
 	elseif event == "key" or event == "key_up" then
 		Keyboard.updateKeys(event, par1, par2)
 
-		if Keyboard.isDown(Keybindings.up) then player:direction(1); player.y = player.y - (Level.checkForCollision(0, x, y - 1) and 0 or 1) end
-		if Keyboard.isDown(Keybindings.left) then player:direction(4); player.x = player.x - (Level.checkForCollision(0, x - 1, y) and 0 or 1) end
-		if Keyboard.isDown(Keybindings.down) then player:direction(3); player.y = player.y + (Level.checkForCollision(0, x, y + 1) and 0 or 1) end
-		if Keyboard.isDown(Keybindings.right) then player:direction(2); player.x = player.x + (Level.checkForCollision(0, x + 1, y) and 0 or 1) end
 		if Keyboard.isDown(Keybindings.lock) then player.lock = not player.lock end
+		if Keyboard.isDown(Keybindings.showDebug) then showDebugInfo = not showDebugInfo end
+		if Keyboard.isDown(Keybindings.showHUD) then showHUD = not showHUD end
+
+		if Keyboard.isDown(keys.up) then currentAsset = currentAsset + 1; if currentAsset > 74 then currentAsset = 1 end end
+		if Keyboard.isDown(keys.down) then currentAsset = currentAsset - 1; if currentAsset < 1 then currentAsset = 74 end end
 
 		if Keyboard.isDown(keys.r) then Level.unloadChunk(0) end
 		if Keyboard.isDown(keys.e) then break end
 
-		for vy = 0, viewHeight do
-			for vx = 0, viewWidth do
-				Level.loadChunk(0, cx + vx, cy + vy)
-			end
-		end
-		drawGUI(); drawWorld()
+		drawGUI(); Buffer.draw()
 
 	elseif event == "mouse_scroll" then
 		currentAsset = currentAsset - par1
 		if currentAsset < 1 then currentAsset = 74 end
 		if currentAsset > 74 then currentAsset = 1 end
-		drawGUI()
+		drawGUI(); Buffer.draw()
 
 	elseif event == "mouse_click" or event == "mouse_drag" then
 		if par1 == 1 then
@@ -272,7 +305,7 @@ while true do
 			currentAsset = (spot and spot[5] or spot[1]) or currentAsset 
 			drawGUI()
 		end
-		drawWorld()
+		drawWorld(); Buffer.draw()
 	end
 end
 
@@ -284,3 +317,37 @@ term.setTextColor(colors.white); print()
 
 --local ip, port = 29, 25565
 --if Client.connect(ip, port) then print("Join successful!") else print("No response.") end
+
+--[[
+if event == "timer" then
+	tick = os.startTimer(0.05)
+	for i = 1, #mods do mods[i].Tick() end
+
+	--for vy = 0, viewHeight do
+	--	for vx = 0, viewWidth do
+	--		Level.updateChunk(0, cx + vx, cy + vy)
+	--	end
+	--end
+	drawWorld()
+
+elseif event == "key" or event == "key_up" then
+	Keyboard.updateKeys(event, par1, par2)
+	local mx = x + ((Keyboard.isDown(Keybindings.left) and (player:direction(4) or -1)) or (Keyboard.isDown(Keybindings.right) and (player:direction(2) or 1)) or 0)
+	local my = y + ((Keyboard.isDown(Keybindings.up) and (player:direction(1) or -1)) or (Keyboard.isDown(Keybindings.down) and (player:direction(3) or 1)) or 0)
+	if mx ~= x and not Level.checkForCollision(0, mx, y) then player.x = mx end; if my ~= y and not Level.checkForCollision(0, player.x, my) then player.y = my end
+
+	if Keyboard.isDown(Keybindings.lock) then player.lock = not player.lock end
+
+	if Keyboard.isDown(keys.up) then currentAsset = currentAsset + 1; if currentAsset > 74 then currentAsset = 1 end end
+	if Keyboard.isDown(keys.down) then currentAsset = currentAsset - 1; if currentAsset < 1 then currentAsset = 74 end end
+
+	if Keyboard.isDown(keys.r) then Level.unloadChunk(0) end
+	if Keyboard.isDown(keys.e) then break end
+
+	for vy = 0, viewHeight do
+		for vx = 0, viewWidth do
+			Level.loadChunk(0, cx + vx, cy + vy)
+		end
+	end
+	drawGUI(); drawWorld()
+--]]
