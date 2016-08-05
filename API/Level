@@ -318,6 +318,7 @@ local function loadStructureInternal(file, name)
     local structure = open(file, "rb"); local byteSize = structure.read()
     if byteSize ~= 1 then error("This version of MiniatureCraft doesn't support " ..tonumber(byteSize).. " byte size.") end
     local Chunk = {}; local sizeX, sizeY = structure.read(), structure.read()
+    if not sizeX or not sizeY then return end
     for y = 1, sizeY do
         Chunk[y] = {}
         for x = 1, sizeX do
